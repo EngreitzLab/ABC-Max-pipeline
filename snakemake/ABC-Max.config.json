@@ -1,0 +1,55 @@
+{
+	"projectDir": "/home/groups/engreitz/Projects/ABC-Max/", 
+	"codeDir": "/home/groups/engreitz/Projects/ABC-Max/Utilities/",
+	"abcDir": "/home/groups/engreitz/Projects/ABC-Max/",
+	"logDir": "/home/groups/engreitz/Projects/ABC-Max/log/",
+	"outDir": "/home/groups/engreitz/Projects/ABC-Max/Test_result",
+
+	"chrSizes": "/home/groups/engreitz/Projects/ABC-Max/Test_data/sizes",
+	"CDS": "/home/groups/engreitz/Projects/ABC-Max/Test_data/GeneCDS.bed",
+
+	"altPredMethods": "/home/groups/engreitz/Projects/ABC-Max/Test_data/e2gMethods.txt",
+	"altPred": "/home/groups/engreitz/Projects/ABC-Max/Test_data/AltPredictions.txt.gz",
+	"altOverlap": "/home/groups/engreitz/Projects/ABC-Max/Test_data/altOverlapAllSNPs.tsv.gz",
+	"altOverlapCounts": "/home/groups/engreitz/Projects/ABC-Max/Test_data/altOverlapCounts.tsv",
+	"altOverlapCountsNoncoding": "/home/groups/engreitz/Projects/ABC-Max/Test_data/altOverlapCounts.AllNoncoding.tsv",
+
+	"bgVariants": "/home/groups/engreitz/Projects/ABC-Max/Test_data/all.bg.SNPs.bed.gz",
+	"ldScore": "/home/groups/engreitz/Software/ldsc/",
+	"ldResultsUK": "/home/groups/engreitz/Projects/ABC-Max/Test_data/UKBiobank.DiseaseLDSCv1.1.results.txt",
+	"ldResults": "/home/groups/engreitz/Projects/ABC-Max/Test_data/DiseaseLdscResults.txt",
+
+	"predictions": ["ABC"],
+	"traits": ["IBD"],
+
+	"ABC": {
+		"rawPredFile": ["/home/groups/engreitz/Projects/ABC-Max/Test_data/EnhancerPredictionsAllPutative.txt.gz"],
+		"ABC015PredFile": ["/home/groups/engreitz/Projects/ABC-Max/Test_data/AllPredictions.AvgHiC.ABC0.015.txt.gz"],
+		"shrunkPredFile": ["/home/groups/engreitz/Projects/ABC-Max/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"],
+		"cellParamsABCGWAS": ["CellParams.forABCGWAS.txt"],
+		"predFile": ["/home/groups/engreitz/Projects/ABC-Max/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.ForABCPaperV3.txt.gz"],
+		"celltypeAnnotation": ["/home/groups/engreitz/Projects/ABC-Max/Test_data/CellTypes.Annotated.ABCPaper.txt"],
+		"tissueCategoryCol": ["Categorical.IBDTissueAnnotations"],
+		"predColForStats": ["ConnectionStrengthRank.Binary.IBDRelevant"],
+		"outDir": ["/home/groups/engreitz/Projects/ABC-Max/Test_data/"],
+		"enhancerListBeds": []
+	},
+
+	"IBD": {
+		"dir": ["/home/groups/engreitz/Projects/ABC-Max/Test_data/Huang2017-IBD/CredibleSets/"],
+		"varBed": ["/home/groups/engreitz/Projects/ABC-Max/Test_data/Huang2017-IBD/CredibleSets/CombinedSNPs.sorted.bed"],
+		"varList": ["/home/groups/engreitz/Projects/ABC-Max/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.variant.list.txt"],
+		"csList": ["/home/groups/engreitz/Projects/ABC-Max/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.cs.txt"],
+		"varFilterCol": ["PosteriorProb"],
+		"varScoreType": ["PP"],
+		"varFilterThreshold": [0.1],
+		"varCtrlThreshold": [0.01],
+		"geneLists": ["/home/groups/engreitz/Projects/ABC-Max/Test_data/Huang2017-IBD/CredibleSets/IBD.GeneLists.181229.txt"],
+		"outDir": ["/home/groups/engreitz/Projects/ABC-Max/Test_result/IBD/"]
+	},
+
+	"CD": {},
+
+	"UC": {}
+
+}
