@@ -9,6 +9,8 @@
 ##  and outputs a series of useful data tables that can be processed or analyzed in various
 ##  ways by other scripts.
 
+# TODO: refactor so that finemapping info is optional
+
 suppressPackageStartupMessages(library("optparse"))
 
 # Required columns for predictions and overlaps:
@@ -16,11 +18,11 @@ suppressPackageStartupMessages(library("optparse"))
 
 # Parse options from commans line
 option.list <- list(
-  make_option("--variants", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.variant.list.txt", help="File containing variants to consider"),
-  make_option("--credibleSets", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.cs.txt", help="File containing credible set annotations"),
-  make_option("--predictionFile", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_data/abc.tsv.gz", help="Prediction overlap file (.txt.gz) output from intersecting variants with predicted enhancers"),
+  make_option("--variants", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.variant.list.txt", help="File containing variants to consider"),
+  make_option("--credibleSets", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.cs.txt", help="File containing credible set annotations"),
+  make_option("--predictionFile", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/abc.tsv.gz", help="Prediction overlap file (.txt.gz) output from intersecting variants with predicted enhancers"),
   make_option("--isABC", type="logical", default=FALSE, help="Using ABC predictions? If TRUE, some additional metrics are plotted."),
-  make_option("--outbase", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_out/IBD/", help="Output file basename"),
+  make_option("--outbase", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_out/IBD/", help="Output file basename"),
   # TODO: edit downstream steps so that these are only used for ABC predictions
   make_option("--cutoff", type="numeric", default=0.015, help="Cutoff on ABC score for distal elements"),
   make_option("--cutoffTss", type="numeric", default=0.1, help="Cutoff on ABC score for tss/promoter elements"),
@@ -29,31 +31,31 @@ option.list <- list(
   make_option("--scoreType", type="character", default="PP", help="Type of variantScoreCol, used in plot labels."),
   make_option("--variantScoreThreshold", type="numeric", default=0.1, help="Score cutoff for desired variants to analyze, e.g. PP>=0.1"),
   make_option("--variantCtrlScoreThreshold", type="numeric", default=0.01, help="Score cutoff for for a control set of variants, e.g. PP<0.01"),
-  make_option("--backgroundVariants", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_data/all.bg.SNPs.bed.gz", help="A set of background variants to use in the enrichment analysis. Bed format with chr, start, end, rsID"),
-  make_option("--genes", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_data/RefSeqCurated.170308.bed", help="RefSeq gene BED file; this is to pull RefSeq IDs to determine coding/noncoding"),
-  make_option("--genesUniq", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed", help="Collapsed RefSeq gene BED file used for E-G predictions"),
-  make_option("--cellTypeTable", type="character", default="/home/groups/engreitz/Projects/ABC-Max/ABC-GWAS/data/CellTypes.Annotated.ABCPaper.txt", help="Table with annotations of cell types, with columns 'CellType', 'Categorical.*', 'Binary.*' for plotting enrichments"),
+  make_option("--backgroundVariants", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/all.bg.SNPs.bed.gz", help="A set of background variants to use in the enrichment analysis. Bed format with chr, start, end, rsID"),
+  make_option("--genes", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/RefSeqCurated.170308.bed", help="RefSeq gene BED file; this is to pull RefSeq IDs to determine coding/noncoding"),
+  make_option("--genesUniq", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed", help="Collapsed RefSeq gene BED file used for E-G predictions"),
+  make_option("--cellTypeTable", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/ABC-GWAS/data/CellTypes.Annotated.ABCPaper.txt", help="Table with annotations of cell types, with columns 'CellType', 'Categorical.*', 'Binary.*' for plotting enrichments"),
   make_option("--relevantCellTypes", type="character", default="Binary.IBDRelevant", help="Column in cell type table containing mask for cell types that are 'relevant' to the trait"),
   make_option("--tissueCategory", type="character", default="Categorical.IBDTissueAnnotations", help="Column in the cell type table containing tissue type categories"),
   # Binary?
   make_option("--predColForStats", type="character", default="ConnectionStrengthRank.Binary.IBDRelevant", help="Prediction to use for making stats"),
-  make_option("--gex", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_data/GeneTSSActivityQuantile.tsv", help="Filename with table of gene expression (or promoter activity) quantiles"),
+  make_option("--gex", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/GeneTSSActivityQuantile.tsv", help="Filename with table of gene expression (or promoter activity) quantiles"),
   make_option("--gexQuantileCutoff", type="numeric", default=0.4, help="Gene expression quantile cutoff to count gene as expressed"),
-  make_option("--promoterActivityRef", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_data/GeneList.txt", help="File from 1 cell type to use to extract distribution of promoter activity across genes (used for TSS-activity weighted predictions)"),
-  make_option("--cellTypeCov", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_data/covariance.all.tsv"),
-  make_option("--specificityBackground", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_data/allSpecificityScores.SparseMatrix.rds"),
+  make_option("--promoterActivityRef", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/GeneList.txt", help="File from 1 cell type to use to extract distribution of promoter activity across genes (used for TSS-activity weighted predictions)"),
+  make_option("--cellTypeCov", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/covariance.all.tsv"),
+  make_option("--specificityBackground", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/allSpecificityScores.SparseMatrix.rds"),
   make_option("--removePromoterVariants", type="logical", default=FALSE, help="Remove credible sets with promoter variants from the filter.cs list"),
   make_option("--removeCodingVariants", type="logical", default=TRUE, help="Remove credible sets with coding variants from the filter.cs list"),
   make_option("--removeSpliceSiteVariants", type="logical", default=TRUE, help="Remove credible sets with splice site variants from the filter.cs list"),
-  make_option("--housekeepingList", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_data/Human.HKGeneList.txt", help="List of housekeeping / ubiquitously expressed genes; will ignore ABC connections to these genes"),
-  make_option("--predColMap", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Test_data/ABCColMap.txt", help="Needed for ABC predictions from new codebase 191221; pass 'NULL' to ignore"),
-  make_option("--codeDir", type="character", default="/home/groups/engreitz/Projects/ABC-Max/Utilities/", help="Directory to code base")
+  make_option("--housekeepingList", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/Human.HKGeneList.txt", help="List of housekeeping / ubiquitously expressed genes; will ignore ABC connections to these genes"),
+  make_option("--predColMap", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/ABCColMap.txt", help="Needed for ABC predictions from new codebase 191221; pass 'NULL' to ignore"),
+  make_option("--codeDir", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Utilities/", help="Directory to code base")
 )
 
 opt <- parse_args(OptionParser(option_list=option.list))
 
 #if (DEBUG <- FALSE) {
-#  opt$codeDir <- "/home/groups/engreitz/Projects/ABC-Max/LanderLab-EP-Prediction/"
+#  opt$codeDir <- "/home/groups/engreitz/Projects/ABC-Max-pipeline/LanderLab-EP-Prediction/"
 #  opt$variants <- "data/variant.list.IBD.FM.txt"
 #  opt$predictionFile <- "analysis/IBD/abc.tsv.gz"
 #  opt$outbase <- "analysis/IBD/"
