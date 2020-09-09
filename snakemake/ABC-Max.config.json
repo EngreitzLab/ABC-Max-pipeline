@@ -3,9 +3,9 @@
 	"codeDir": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Utilities/",
 	"abcDir": "/home/groups/engreitz/Projects/ABC-Max-pipeline/",
 	"logDir": "/home/groups/engreitz/Projects/ABC-Max-pipeline/log/",
-	"outDir": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_result",
+	"outDir": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_out",
 
-	"chrSizes": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/sizes",
+	"chrSizes": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/sizes_sorted",
 	"CDS": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/GeneCDS.bed",
 
 	"altPredMethods": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/e2gMethods.txt",
@@ -28,11 +28,12 @@
 		"shrunkPredFile": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"],
 		"cellParamsABCGWAS": ["CellParams.forABCGWAS.txt"],
 		"predFile": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.ForABCPaperV3.txt.gz"],
+		"genes": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/RefSeqCurated.170308.bed"],
+		"genesUniq": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed"],
 		"celltypeAnnotation": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/CellTypes.Annotated.ABCPaper.txt"],
 		"tissueCategoryCol": ["Categorical.IBDTissueAnnotations"],
 		"predColForStats": ["ConnectionStrengthRank.Binary.IBDRelevant"],
-		"outDir": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/"],
-		"enhancerListBeds": []
+		"enhancerListBeds": ["/path/to/list_of_celltype_beds.tsv"]
 	},
 
 	"IBD": {
@@ -43,9 +44,7 @@
 		"varFilterCol": ["PosteriorProb"],
 		"varScoreType": ["PP"],
 		"varFilterThreshold": [0.1],
-		"varCtrlThreshold": [0.01],
-		"geneLists": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBD.GeneLists.181229.txt"],
-		"outDir": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_result/IBD/"]
+		"varCtrlThreshold": [0.01]
 	},
 
 	"CD": {},
