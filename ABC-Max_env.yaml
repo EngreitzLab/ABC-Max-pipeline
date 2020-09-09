@@ -7,3 +7,4 @@ dependencies:
   - python=3.7
   - snakemake=5.22.1
   - bedtools=2.29.2
+  - csvtk=0.20.0
