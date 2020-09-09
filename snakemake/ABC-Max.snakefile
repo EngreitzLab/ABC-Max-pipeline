@@ -7,21 +7,14 @@ configfile: "ABC-Max.config.json"
 
 from os.path import join
 
-#def getCSnames(wildcards):
-#	return ["a list of credible set names depending on given wildcards"]
-#
-#def getTraits(wildcards):
-#	return ["a list of dz traits depending on given wildcards"]
+# TODO: automatically create new directories for each trait+prediction set combo
+# TODO: overlap by celltype
+# TODO: change shrunkPredFile to predFile
+# TODO: move over the raw ABC output
 
 # Gathering all the outputs for all sets of predictions and variants
 outputSet = set()
 
-# TODO: automatically create new directories for each trait+prediction set combo
-# TODO: overlap by celltype
-
-# Preprocessing ABC?
-# TODO: change shrunkPredFile to predFile
-# TODO: move over the raw ABC output
 if "ABC" in config["predictions"]:
 	outputSet.add(config["ABC"]["shrunkPredFile"][0])
 
@@ -73,7 +66,7 @@ rule computeBackgroundOverlap:
 	run:
 		shell(
 			"""
-			#set +o pipefail;
+			# set +o pipefail;
 			# Intersecting a background list of variants with predicted enhancers 
 			# to compute background rate at which common variants overlap enhancers
 			# overall
@@ -155,7 +148,9 @@ rule overlapVariants:
 	run:
 		shell(
 			"""
-			zcat {input.predFile} | head -1 | awk '{ print $0 "\\tvariant.chr\\tvariant.start\\tvariant.end\\tQueryRegionName" }' | gzip > {output.overlap};
+			set +o pipefail;
+			# Creating an empty file with the final columns
+			zcat {input.predFile} | head -1 | awk '{{ print $0 "\\tvariant.chr\\tvariant.start\\tvariant.end\\tQueryRegionName" }}' | gzip > {output.overlap};
 	
 			# Intersecting variants with predictions
 			zcat {input.predFile} | sed 1d | bedtools intersect -sorted -g {params.chrSizes} -b {input.varBedgraph} -a stdin -wb | gzip >> {output.overlap}
@@ -183,7 +178,7 @@ rule overlapVariantsByCelltype:
 			# TODO: generalize for any set of predictions
 
 			# Creating an empty file with additional columns
-			zcat {input.allPred} | head -1 | awk '{{ print $0 "\tvariant.chr\tvariant.start\tvariant.end\tQueryRegionName" }}' | gzip > {output.overlap} \
+			zcat {input.allPred} | head -1 | awk "{{ print \$0 "\\tvariant.chr\\tvariant.start\\tvariant.end\\tQueryRegionName" }}" | gzip > {output.overlap} \
 			
 			# Looping through cell types
 			cat {params.enhancerListBeds} | while read cellType bedFile; do
