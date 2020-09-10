@@ -9,12 +9,10 @@
 ##  and outputs a series of useful data tables that can be processed or analyzed in various
 ##  ways by other scripts.
 
-# TODO: refactor so that finemapping info is optional
-
 suppressPackageStartupMessages(library("optparse"))
 
-# Required columns for predictions and overlaps:
-# match ABC.Score/Score.Fraction
+# TODO: match ABC.Score/Score.Fraction throughout
+# TODO: refactor so that finemapping info is optional
 
 # Parse options from commans line
 option.list <- list(
@@ -22,6 +20,7 @@ option.list <- list(
   make_option("--credibleSets", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.cs.txt", help="File containing credible set annotations"),
   make_option("--predictionFile", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/abc.tsv.gz", help="Prediction overlap file (.txt.gz) output from intersecting variants with predicted enhancers"),
   make_option("--isABC", type="logical", default=FALSE, help="Using ABC predictions? If TRUE, some additional metrics are plotted."),
+  make_option("--predScore", type="character", default="ABC.Score", help="Name of the column with the prediction score, e.g. ABC-score."),
   make_option("--outbase", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_out/IBD/", help="Output file basename"),
   # TODO: edit downstream steps so that these are only used for ABC predictions
   make_option("--cutoff", type="numeric", default=0.015, help="Cutoff on ABC score for distal elements"),
@@ -32,12 +31,12 @@ option.list <- list(
   make_option("--variantScoreThreshold", type="numeric", default=0.1, help="Score cutoff for desired variants to analyze, e.g. PP>=0.1"),
   make_option("--variantCtrlScoreThreshold", type="numeric", default=0.01, help="Score cutoff for for a control set of variants, e.g. PP<0.01"),
   make_option("--backgroundVariants", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/all.bg.SNPs.bed.gz", help="A set of background variants to use in the enrichment analysis. Bed format with chr, start, end, rsID"),
+  make_option("--bgOverlap", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_out/ABC.OverlapAllSNPs.tsv.gz", help="Background variant overlap with predictions"),
   make_option("--genes", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/RefSeqCurated.170308.bed", help="RefSeq gene BED file; this is to pull RefSeq IDs to determine coding/noncoding"),
   make_option("--genesUniq", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed", help="Collapsed RefSeq gene BED file used for E-G predictions"),
   make_option("--cellTypeTable", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/ABC-GWAS/data/CellTypes.Annotated.ABCPaper.txt", help="Table with annotations of cell types, with columns 'CellType', 'Categorical.*', 'Binary.*' for plotting enrichments"),
   make_option("--relevantCellTypes", type="character", default="Binary.IBDRelevant", help="Column in cell type table containing mask for cell types that are 'relevant' to the trait"),
   make_option("--tissueCategory", type="character", default="Categorical.IBDTissueAnnotations", help="Column in the cell type table containing tissue type categories"),
-  # Binary?
   make_option("--predColForStats", type="character", default="ConnectionStrengthRank.Binary.IBDRelevant", help="Prediction to use for making stats"),
   make_option("--gex", type="character", default="/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/GeneTSSActivityQuantile.tsv", help="Filename with table of gene expression (or promoter activity) quantiles"),
   make_option("--gexQuantileCutoff", type="numeric", default=0.4, help="Gene expression quantile cutoff to count gene as expressed"),
@@ -97,6 +96,7 @@ variant.list <- read.delim(opt$variants, check.names=F)
 
 # Finding a vector of relevant cell types
 # TODO: Requirements for this file?
+# TODO: only use this celltype table is using the ABC predictions. Else?
 cell.type.annot <- read.delim(opt$cellTypeTable, check.names=F)
 cell.type.list <- cell.type.annot$CellType
 
@@ -113,18 +113,17 @@ variant.list.filter <- subset(variant.list, CredibleSet %in% filter.cs$CredibleS
 
 # Finding CSs and variants that exceed the provided threhold. If no variant score
 # and threshold are provided, using all variants in downstream steps
-# eval(parse(text = opt$variantScoreCol))
 sigScore.cs = NULL
 variant.list.sigScore = NULL
 if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
-  sigScore.cs <- subset(filter.cs, CredibleSet %in% subset(variant.list.filter, eval(parse(text = opt$variantScoreCol)) >= opt$variantScoreThreshold)$CredibleSet)
+  sigScore.cs <- subset(filter.cs, CredibleSet %in% subset(variant.list.filter, get(opt$variantScoreCol) >= opt$variantScoreThreshold)$CredibleSet)
   variant.list.sigScore <- subset(variant.list.filter, CredibleSet %in% sigScore.cs$CredibleSet) ## this is the list of variants in credible sets with at least 1 variant with posterior prob >10%
 }
 
 # Overlapping variants with predictions
 # TODO: edit loadVariantOverlap() so that predColMap is no longer needed
 # TODO: generalize so that this can be run for any set of predictions with
-# particular column names
+# the required column names
 if (opt$isABC){
   predColMap <- if (!is.null(opt$predColMap)) read.delim(opt$predColMap, stringsAsFactors=F) else NULL
   overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, colMap=predColMap)
@@ -139,6 +138,7 @@ all.flat <- annotateVariantOverlaps(overlap, variant.list, all.cs)
 all.flat <- subset(all.flat, CellType %in% cell.type.list)  ## IMPORTANT CHANGE
 filter.flat <- subset(all.flat, CredibleSet %in% filter.cs$CredibleSet)
 
+# If a threshold is provided, getting annotations for significant variants
 sigScore.flat = NULL
 if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
   sigScore.flat <- subset(filter.flat, CredibleSet %in% sigScore.cs$CredibleSet)
@@ -164,7 +164,6 @@ trait <- opt$trait
 #  alt.overlap <- NULL
 #}
 
-# Redundant?
 #if (!is.null(opt$geneScores)) {
 #  gene.scores <- read.delim(opt$geneScores, check.names=F, stringsAsFactors=F)
 #  gene.lists <- c(gene.lists, getGeneListsFromGeneScores(alt.overlap, opt$posteriorProb))
@@ -200,14 +199,14 @@ getBasicStats <- function(all.cs, filter.cs, sigScore.cs, variant.list.sigScore,
     res$`Number of credible sets with no coding or splice variants, and at least one variant with score above threshold (sigScore.cs)` <- nrow(sigScore.cs)
     res$`Number of sigScore.cs sets that have any variant (regardless of significance score) that overlaps any enhancer` <- with(subset(all.flat, CredibleSet %in% sigScore.cs$CredibleSet), length(unique(CredibleSet)))
     res$`Number of variants in sigScore.cs sets` <- nrow(variant.list.sigScore)
-    res$`Num Variants with score above threshold in sigScore.cs` <- with(variant.list.sigScore, sum(eval(parse(text = opt$variantScoreCol)) >= opt$variantScoreThreshold))
-    res$`Num variants above score threshold in sigScore.cs that overlap any enhancer` <- with(sigScore.flat, length(unique(QueryRegionName[eval(parse(text = opt$variantScoreCol)) >= opt$variantScoreThreshold])))
-    res$`Num sigScore credible sets with variants above score threshold that overlap any enhancer` <- with(sigScore.flat, length(unique(CredibleSet[eval(parse(text = opt$variantScoreCol)) >= opt$variantScoreThreshold])))
+    res$`Num Variants with score above threshold in sigScore.cs` <- with(variant.list.sigScore, sum(get(opt$variantScoreCol) >= opt$variantScoreThreshold))
+    res$`Num variants above score threshold in sigScore.cs that overlap any enhancer` <- with(sigScore.flat, length(unique(QueryRegionName[get(opt$variantScoreCol) >= opt$variantScoreThreshold])))
+    res$`Num sigScore credible sets with variants above score threshold that overlap any enhancer` <- with(sigScore.flat, length(unique(CredibleSet[get(opt$variantScoreCol) >= opt$variantScoreThreshold])))
     for (bin in cell.bins) {
       res[[paste0("Num variants above the score threshold in sigScore.cs that overlap an enhancer in any ", bin, " cell type")]] <- 
-        with(sigScore.flat, length(unique(QueryRegionName[eval(parse(text = opt$variantScoreCol)) >= opt$variantScoreThreshold & CellType %in% with(cell.type.annot, CellType[get(bin)])])))
+        with(sigScore.flat, length(unique(QueryRegionName[get(opt$variantScoreCol) >= opt$variantScoreThreshold & CellType %in% with(cell.type.annot, CellType[get(bin)])])))
       res[[paste0("Num credible sets with variants above the score threshold that overlap an enhancer in any ", bin, " cell type")]] <- 
-        with(sigScore.flat, length(unique(CredibleSet[eval(parse(text = opt$variantScoreCol)) >= opt$variantScoreThreshold & CellType %in% with(cell.type.annot, CellType[get(bin)])])))
+        with(sigScore.flat, length(unique(CredibleSet[get(opt$variantScoreCol) >= opt$variantScoreThreshold & CellType %in% with(cell.type.annot, CellType[get(bin)])])))
     }
   }
   
@@ -217,9 +216,7 @@ getBasicStats <- function(all.cs, filter.cs, sigScore.cs, variant.list.sigScore,
 
 stats[['all']] <- getBasicStats(all.cs, filter.cs, sigScore.cs, variant.list.sigScore, sigScore.flat)
 
-
 saveProgress()
-
 
 ##############################################################################
 ## Calculate enrichment per cell type by comparing the significant/provided
@@ -239,12 +236,12 @@ pdf(file=paste0(opt$outbase, "Enrichment.CellType.vsScore.pdf"), width=5, height
 #for (trait in unique(variant.list.filter$Disease)) {
 #  tryCatch({
 #curr.vl <- subset(variant.list.filter, Disease==trait)
-#variant.by.cells <- getVariantByCellsTable(filter.flat)
+variant.by.cells <- getVariantByCellsTable(filter.flat)
 # TODO: use bgVars instead of ctrlPP, DONE
 # TODO: change "variant" column to rsID?
 # TODO: if the prediction file includes a column "Promoter" that has both TRUE 
 # and FALSE values, calculate enrichment with and without promoters
-if (opt$promoters){
+if (!(is.null(opt$promoters))) {
   # With promoters
   enrich <- computeCellTypeEnrichment(variant.by.cells,
                                       variant.list.filter,
@@ -254,14 +251,14 @@ if (opt$promoters){
                                       bg.vars=bgVars)
   # Without promoters
   enrich.nopromoter <- computeCellTypeEnrichment(getVariantByCellsTable(subset(filter.flat, !Promoter), opt$variantScoreCol),
-                                                 subset(curr.vl, !Promoter),
+                                                 subset(variant.list.filter, !Promoter),
                                                  cell.type.annot,
                                                  score.col=opt$variantScoreCol,
                                                  min.score=opt$variantScoreThreshold, bg.vars=bgVars)
   enrich <- merge(enrich, enrich.nopromoter %>% select(CellType,vsGenome.enrichment,vsGenome.log10pBinom,vsGenome.Significant), by="CellType", suffixes=c("",".NoPromoters"))
 } else {
   enrich <- computeCellTypeEnrichment(variant.by.cells,
-                                      variant.list.filter,
+                                      variant.list=variant.list.filter,
                                       cell.type.annot,
                                       score.col=opt$variantScoreCol,
                                       min.score=opt$variantScoreThreshold,
@@ -272,6 +269,7 @@ write.tab(enrich, file=paste0(edir, "/Enrichment.CellType.vsScore.", trait,".tsv
 cell.type.annot <- addEnrichmentSignificantCellTypes(cell.type.annot, enrich, trait)
 
 # TODO: Assuming one trait
+# TODO: the grouped barplots are broken
 for (cat in cell.categories) {
   print(cat)
   ## Aggregate for each of the cell type categories
@@ -286,14 +284,22 @@ for (cat in cell.categories) {
                                               bg.vars=bgVars) # NOT SUPPORTED YET, ldsc=ldsc[[trait]])
   write.tab(enrich.grouped, file=paste0(edir, "/Enrichment.CellType.vsScore.", trait, ".", cat, ".tsv"))    
   # TODO: change plot axis label
-  plotCellTypeEnrichmentBarplot(enrich.grouped, "CellType", main=paste(trait, cat))
+  plotCellTypeEnrichmentBarplot(enrich.grouped, color.col="CellType", sort.by.group=TRUE, main=paste(trait, cat))
   # }
   #}, error = function(e) { print(e); print(paste0("Failed enrichment barplots for ", trait)) })
 }
 dev.off()
 
 
-# Redundant?
+
+# TODO: calculate overlap of all variants with enhancers:
+# the proportion of all 1000G variants that overlap enhancers in each cell type
+bgOverlap <- fread(opt$bgOverlap)
+bgOverlapPerCelltype <- bgOverlap %>% group_by(V8) %>% summarise(prop.overlap=n()/nrow(bgVars))
+colnames(bgOverlapPerCelltype) <- c("CellType", "bg.prop.overlap")
+cell.type.annot <- merge(cell.type.annot, bgOverlapPerCelltype, by="CellType")
+
+# In each cell type, are the disease variants enriched compared to the background variants?
 #if (!is.null(ldsc)) cell.type.annot$`Binary.AnyDisease_FMOverlap_Enriched` <- apply(cell.type.annot[,paste0("Binary.",diseases,"_FMOverlap_Enriched"),drop=F], 1, any)
 
 # What to do with these cell.bins?
@@ -324,18 +330,19 @@ dev.off()
 ##############################################################################
 ## Analysis per credible set
 ##  How many credible sets can we "explain" using various thresholds?
+# TODO: edit posteriorprob
 plotCredibleSetHeatmaps <- function(flat, cs, v.list, score.col=NULL, score.cutoff=NULL) {
   pdf(file=paste0(opt$outbase, "CredibleSetCellTypeHeatmap.pdf"), width=16, height=16, onefile=TRUE)
   # If a score and threshold are provided, subset
   to.plot <- flat
   if (!is.null(score.cutoff)){
-    to.plot <- subset(flat, eval(parse(text = score.col)) >= score.cutoff)
+    to.plot <- subset(flat, get(score.col) >= score.cutoff)
   }
   tab <- plotCredibleSetCellTypeHeatmap(to.plot, main="all")
   sorted.cells <- colnames(tab)
   # Edit: assuming one disease
   #for (trait in traits) {
-  #to.plot <- subset(flat, Disease==trait & eval(parse(text = score.col)) >= score.cutoff)
+  #to.plot <- subset(flat, Disease==trait & get(score.col) >= score.cutoff)
   if (nrow(to.plot) > 1) {
     tab <- plotCredibleSetCellTypeHeatmap(to.plot, main=trait)
   }
@@ -357,7 +364,7 @@ plotCredibleSetHeatmaps <- function(flat, cs, v.list, score.col=NULL, score.cuto
 if (!is.null(sigScore.cs)){
   sorted.cells <- plotCredibleSetHeatmaps(sigScore.flat, sigScore.cs, variant.list.sigScore, score.col=opt$variantScoreCol, score.cutoff=opt$variantScoreThreshold)
 } else {
-  sorted.cells <- plotCredibleSetHeatmaps(all.flat, all.cs, variant.list)
+  sorted.cells <- plotCredibleSetHeatmaps(filter.flat, filter.cs, variant.list.filter)
 }
 #sorted.cells <- plotCredibleSetHeatmaps(filter.flat, filter.cs, variant.list.filter, 0.01, "pp01")
 
@@ -368,9 +375,9 @@ saveProgress()
 
 pred.col.stats <- opt$predColForStats 
 
-#pred.cols <- list(
-#  DistanceRank=1,
-#  ConnectionStrengthRank.Binary.AnyDisease_FMOverlap_Enriched=1,
+pred.cols <- list(
+  DistanceRank=1,
+  ConnectionStrengthRank.Binary.AnyDisease_FMOverlap_Enriched=1)
 #  `GeneList.Prediction.eRNA-Andersson2014`=TRUE,
 #  `GeneList.Prediction.PCHiC-Javierre2016`=TRUE,
 #  `GeneList.Prediction.ENCODE2012`=TRUE,
@@ -411,26 +418,27 @@ if(!is.null(sigScore.cs)){
   
   pair.stats <- getGeneCellTypePairAnalysis(sigScore.flat, gp.sigScore, "ConnectionStrengthRank", 1, cell.type.annot, unique.cell.col="Categorical.CellTypeMerged")
   stats$all <- c(stats$all, pair.stats)
-  stats$all$`E-G distance for best 2 genes - min` <- quantile(subset(sigScore.flat, TargetGene %in% best.genes.sigScore & eval(parse(text = opt$variantScoreCol)) >= opt$variantScoreThreshold)$distance, 0)
-  stats$all$`E-G distance for best 2 genes - median` <- quantile(subset(sigScore.flat, TargetGene %in% best.genes.sigScore & eval(parse(text = opt$variantScoreCol)) >= opt$variantScoreThreshold)$distance, 0.5)
-  stats$all$`E-G distance for best 2 genes - max` <- quantile(subset(sigScore.flat, TargetGene %in% best.genes.sigScore & eval(parse(text = opt$variantScoreCol)) >= opt$variantScoreThreshold)$distance, 1)
-  stats$all$`E-G distance for best 2 genes - mean` <- mean(subset(sigScore.flat, TargetGene %in% best.genes.sigScore & eval(parse(text = opt$variantScoreCol)) >= opt$variantScoreThreshold)$distance)
+  stats$all$`E-G distance for best 2 genes - min` <- quantile(subset(sigScore.flat, TargetGene %in% best.genes.sigScore & get(opt$variantScoreCol) >= opt$variantScoreThreshold)$distance, 0)
+  stats$all$`E-G distance for best 2 genes - median` <- quantile(subset(sigScore.flat, TargetGene %in% best.genes.sigScore & get(opt$variantScoreCol) >= opt$variantScoreThreshold)$distance, 0.5)
+  stats$all$`E-G distance for best 2 genes - max` <- quantile(subset(sigScore.flat, TargetGene %in% best.genes.sigScore & get(opt$variantScoreCol) >= opt$variantScoreThreshold)$distance, 1)
+  stats$all$`E-G distance for best 2 genes - mean` <- mean(subset(sigScore.flat, TargetGene %in% best.genes.sigScore & get(opt$variantScoreCol) >= opt$variantScoreThreshold)$distance)
   
   gp.all <- getGenePrioritizationTable(all.flat, all.cs, genes, genes.uniq, sorted.cells, cell.type.annot, cell.bins, var.score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold)
   #gp.all <- addE2GMethodsToGP(gp.all, alt.overlap, opt$posteriorProb)
   write.tab(gp.all, file=paste0(opt$outbase,"GenePredictions.all.tsv"))
   best.genes.all <- getBestGenesFromPrioritizitionTable(gp.all)
   write.tab(best.genes.all, file=paste0(opt$outbase, "GenePredictions.all.Best2Genes.tsv"), col.names=F)
-  #gene.list.comparison <- compareABCPredictionsToGeneLists(gp.all, cell.bins, pred.cols=pred.cols[names(pred.cols) %in% colnames(gp.sigScore)])
-  #write.tab(gene.list.comparison, file=paste0(opt$outbase, "GenePredictions.all.GeneListComparison.tsv"))
+  gene.list.comparison <- compareABCPredictionsToGeneLists(gp.all, cell.bins, pred.cols=pred.cols[names(pred.cols) %in% colnames(gp.sigScore)])
+  write.tab(gene.list.comparison, file=paste0(opt$outbase, "GenePredictions.all.GeneListComparison.tsv"))
 } else {
+  # TODO: refactor
   gp.all <- getGenePrioritizationTable(all.flat, all.cs, genes, genes.uniq, sorted.cells, cell.type.annot, cell.bins, gene.lists, score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold)
   #gp.all <- addE2GMethodsToGP(gp.all, alt.overlap, opt$posteriorProb)
   write.tab(gp.all, file=paste0(opt$outbase,"GenePredictions.all.tsv"))
   best.genes.all <- getBestGenesFromPrioritizitionTable(gp.all)
   write.tab(best.genes.all, file=paste0(opt$outbase, "GenePredictions.all.Best2Genes.tsv"), col.names=F)
-  #gene.list.comparison <- compareABCPredictionsToGeneLists(gp.all, cell.bins, pred.cols=pred.cols[names(pred.cols) %in% colnames(gp.sigScore)])
-  #write.tab(gene.list.comparison, file=paste0(opt$outbase, "GenePredictions.all.GeneListComparison.tsv"))
+  gene.list.comparison <- compareABCPredictionsToGeneLists(gp.all, cell.bins, pred.cols=pred.cols[names(pred.cols) %in% colnames(gp.sigScore)])
+  write.tab(gene.list.comparison, file=paste0(opt$outbase, "GenePredictions.all.GeneListComparison.tsv"))
   
   pair.stats <- getGeneCellTypePairAnalysis(all.flat, gp.all, "ConnectionStrengthRank", 1, cell.type.annot, unique.cell.col="Categorical.CellTypeMerged")
   stats$all <- c(stats$all, pair.stats)
@@ -442,12 +450,11 @@ if(!is.null(sigScore.cs)){
 }
 
 ## TO move
-abcmax <- getABCMaxTable(gp.all, all.flat, cell.type.annot, score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold, cellTypeFlag=opt$predColForStats)
+# cellTypeFlag=opt$predColForStats ?
+# score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold
+# Getting the ABC-Max table
+abcmax <- getABCMaxTable(gp.all, all.flat, cell.type.annot, score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold)
 write.tab(abcmax, file=paste0(opt$outbase, "GenePredictions.ABCMaxSummary.tsv"))
-
-## TO move
-#abcmax <- getABCMaxTable(gp.all, all.flat, cell.type.annot, score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold, cellTypeFlag="AnyDisease_LDSC_Enriched")
-#write.tab(abcmax, file=paste0(opt$outbase, "GenePredictions.ABCMaxSummary.LDSC.tsv"))
 
 ## Repeat using promoter activity-weighted score for ranking, rather than ABC score
 #gp.sigScore.pw <- getGenePrioritizationTable(filter.flat, filter.cs, genes, genes.uniq, sorted.cells, cell.type.annot, cell.bins, gene.lists, min.pp=opt$posteriorProb, score.col="ABCWeightedByPromoter")
@@ -465,11 +472,14 @@ saveProgress()
 ##  Count genes that have multiple independent variants pointing to them in the
 ##  same cell type
 # TODO: get tissue annotation column from the argument parser, if needed
+# TODO: Change ABC.Score/Score.Fraction to whatever is selected
 #tmp <- merge(filter.flat, cell.type.annot[,c("CellType","Categorical.IBDTissueAnnotations")])
+
+#opt$predScore
 
 if (!is.null(opt$tissueCategory)){
   tmp <- merge(filter.flat, cell.type.annot[,c("CellType", opt$tissueCategory)])
-  top.genes.per.variant <- as.data.frame(tmp %>% group_by(QueryRegionName,CellType) %>% top_n(2, -Score.Fraction) %>% ungroup())
+  top.genes.per.variant <- as.data.frame(tmp %>% group_by(QueryRegionName,CellType) %>% top_n(2, -get(opt$predScore)) %>% ungroup())
   top.genes.per.variant$LocusID <- unlist(lapply(strsplit(as.character(as.matrix(top.genes.per.variant$CredibleSet)),"-"),"[[",2))
   multiple.variants <- as.data.frame(unique(top.genes.per.variant[,c("CredibleSet","CellType","TargetGene")] %>% group_by(CellType,TargetGene)) %>% tally())
   multiple.variants <- merge(multiple.variants, unique(top.genes.per.variant[,c("TargetGene","LocusID")]))
@@ -477,14 +487,14 @@ if (!is.null(opt$tissueCategory)){
   write.tab(multiple.variants, file=paste0(opt$outbase, "GenePredictions.MultipleIndependentVariants.tsv"))
   
   # Same analysis but divided by cell category
-  multiple.variants.cat <- as.data.frame(unique(top.genes.per.variant[,c("CredibleSet",opt$tissueCategory,"TargetGene")] %>% group_by(eval(parse(text = opt$tissueCategory)),TargetGene)) %>% tally())
+  multiple.variants.cat <- as.data.frame(unique(top.genes.per.variant[,c("CredibleSet",opt$tissueCategory,"TargetGene")] %>% group_by(get(opt$tissueCategory),TargetGene)) %>% tally())
   multiple.variants.cat <- merge(multiple.variants.cat, unique(top.genes.per.variant[,c("TargetGene","LocusID")]))
   multiple.variants.cat <- subset(multiple.variants.cat, n>1) %>% arrange(TargetGene)
   colnames(multiple.variants.cat) <- c("TargetGene", "TissueCategory", "n", "LocusID")
   write.tab(multiple.variants.cat, file=paste0(opt$outbase, "GenePredictions.MultipleIndependentVariants.ByTissueCategory.tsv"))
 } else {
   tmp <- merge(filter.flat, cell.type.annot[,c("CellType")])
-  top.genes.per.variant <- as.data.frame(tmp %>% group_by(QueryRegionName,CellType) %>% top_n(2, -Score.Fraction) %>% ungroup())
+  top.genes.per.variant <- as.data.frame(tmp %>% group_by(QueryRegionName,CellType) %>% top_n(2, -get(opt$predScore)) %>% ungroup())
   top.genes.per.variant$LocusID <- unlist(lapply(strsplit(as.character(as.matrix(top.genes.per.variant$CredibleSet)),"-"),"[[",2))
   multiple.variants <- as.data.frame(unique(top.genes.per.variant[,c("CredibleSet","CellType","TargetGene")] %>% group_by(CellType,TargetGene)) %>% tally())
   multiple.variants <- merge(multiple.variants, unique(top.genes.per.variant[,c("TargetGene","LocusID")]))
@@ -564,7 +574,7 @@ plotEnhancerProperties(enhancer.properties.all, score.type=opt$scoreType, score.
 dev.off()
 
 # ======================================
-# Write output tables
+# Write final output tables
 # ======================================
 
 # If a score column and a significance threhold were provided...
@@ -612,6 +622,4 @@ saveProgress()
 #pdf(file=paste0(opt$outbase, "GenePredictions.Enrichment.200Kb.pdf"), width=5, height=5)
 #plotGeneRankEnrichment(subset(gp.plot, PromoterDistanceToBestSNP <= 200000), cell.type.annot, cell.bins, xlim=c(1,10))
 #dev.off()
-
-
 

@@ -8,7 +8,6 @@ configfile: "ABC-Max.config.json"
 from os.path import join
 
 # TODO: automatically create new directories for each trait+prediction set combo
-# TODO: overlap by celltype
 # TODO: change shrunkPredFile to predFile
 # TODO: move over the raw ABC output
 
@@ -27,7 +26,6 @@ rule all:
 		expand(os.path.join(config["outDir"], "{trait}.bed"), trait=config["traits"]),
 		expand(os.path.join(config["outDir"], "{trait}.bedgraph"), trait=config["traits"]),
 		expand(os.path.join(config["outDir"], "{trait}.{pred}.tsv.gz"), trait=config["traits"], pred=config["predictions"])
-		#expand(os.path.join(config["outDir"], "{trait}.{pred}.CellType.tsv.gz"), trait=config["traits"], pred=config["predictions"])
 
 # TODO: Move this to another snakefile?
 rule preprocessABC:
@@ -66,7 +64,7 @@ rule computeBackgroundOverlap:
 	run:
 		shell(
 			"""
-			# set +o pipefail;
+			set +o pipefail;
 			# Intersecting a background list of variants with predicted enhancers 
 			# to compute background rate at which common variants overlap enhancers
 			# overall
@@ -148,46 +146,16 @@ rule overlapVariants:
 	run:
 		shell(
 			"""
+			# TODO: find an alternative
 			set +o pipefail;
+
 			# Creating an empty file with the final columns
 			zcat {input.predFile} | head -1 | awk '{{ print $0 "\\tvariant.chr\\tvariant.start\\tvariant.end\\tQueryRegionName" }}' | gzip > {output.overlap};
 	
 			# Intersecting variants with predictions
 			zcat {input.predFile} | sed 1d | bedtools intersect -sorted -g {params.chrSizes} -b {input.varBedgraph} -a stdin -wb | gzip >> {output.overlap}
-	
 			""")
 
-
-rule overlapVariantsByCelltype:
-	input:
-		allPred = lambda wildcard: config[wildcard.pred]["predFile"][0],
-		#celltypeAnnotation = lambda wildcard: config[wildcard.pred]["celltypeAnnotation"][0],
-		varBedgraph = os.path.join(config["outDir"], "{trait}.bedgraph")
-	output:
-		overlap = os.path.join(config["outDir"], "{trait}.{pred}.CellType.tsv.gz")
-	log: os.path.join(config["logDir"], "{trait}.{pred}.overlap.celltype.log")
-	params:
-		# A file with paths to BED files containing predicted enhancers per cell type
-		enhancerListBeds = lambda wildcard: config[wildcard.pred]["enhancerListBeds"][0],
-		chrSizes = config["chrSizes"]
-	message: "Overlapping {wildcards.trait} variants with {wildcards.pred} enhancers by cell type"
-	run:
-		shell(
-			"""
-			# TODO: Automatically create the celltype bed files from the prediction file
-			# TODO: generalize for any set of predictions
-
-			# Creating an empty file with additional columns
-			zcat {input.allPred} | head -1 | awk "{{ print \$0 "\\tvariant.chr\\tvariant.start\\tvariant.end\\tQueryRegionName" }}" | gzip > {output.overlap} \
-			
-			# Looping through cell types
-			cat {params.enhancerListBeds} | while read cellType bedFile; do
-				cat $bedFile | cut -f 1-3 | uniq | awk -v ct=$cellType -F $'\\t' '{{
-				print $1 "\t" $2 "\t" $3 "\t" ct "-" NR "\tintergenic\t2\tGATA1\t48644981\tNaN\t0.9\tTrue\t100000\tFalse\t0.5\t0.5\t0.5\t0.5\t0.5\t0.5\t0.5\t0.03\t0.5\t0.03\t" ct
-			  }}' | bedtools intersect -sorted -g {input.chrSizes} -b {input.varBedgraph} -a stdin -wb
-			done | bedtools sort -i stdin -faidx {input.chrSizes} | gzip >> {output.overlap}
-			"""
-			)
 
 rule annotateVariants:
 	input:
