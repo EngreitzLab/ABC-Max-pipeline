@@ -15,6 +15,7 @@ Enhancer-Gene predictions (predFile) with the following columns
 	* TargetGeneTSS (TSS of the target gene)
 * Optional columns
 	* CellType
+	* Significance score, e.g. ABC-sore
 
 Variant list (varList)
 * Required columns
@@ -30,7 +31,6 @@ A set of background variants, e.g. all 1000genomes variants, in BED format witho
 	* start
 	* end
 	* variants (rsID)
-
 
 TODO: check that only "position" is needed, not start and end, like in the variant list.
 
@@ -63,10 +63,13 @@ If starting with the raw-outputs of the ABC-pipeline, the first step in the ABC-
 ###  1. Compute background overlap (rule: computeBackgroundOverlap)
 Intersecting a background list of variants with predicted enhancers to compute background rate at which common variants overlap enhancers overall. This is done for all variants and non-coding variants.
 
+### 2. Create variant BED files (rule: createVarFiles)
+Creating .bed and .bedgraph files based on the variant list. If a significance score and threshold are provided, creating a list file for the significant variants.
 
-### 2. 
+### 3. Compute variant overlap (rule: overlapVariants)
+Intersecting (significant) variants with predicted enhancers.
 
-
-### 3.
+### 4. Annotate variants (rule: annotateVariants)
+Calling an R script to run ABC-Max.
 
 

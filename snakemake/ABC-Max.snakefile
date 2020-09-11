@@ -64,6 +64,7 @@ rule computeBackgroundOverlap:
 	run:
 		shell(
 			"""
+			# TODO: find an alternative to deal with pipefail
 			set +o pipefail;
 			# Intersecting a background list of variants with predicted enhancers 
 			# to compute background rate at which common variants overlap enhancers
@@ -102,7 +103,7 @@ rule createVarFiles:
 		if "{params.varFilterCol}" is not None:
 			shell(
 				"""
-				## Subsetting the variant list based on significance
+				# Subsetting the variant list based on significance
 				# Finding the score column
 				#scoreCol=$(awk -v RS='\\t' '/{params.varFilterCol}/{{print NR; exit}}' {input.varList});
 
@@ -146,7 +147,7 @@ rule overlapVariants:
 	run:
 		shell(
 			"""
-			# TODO: find an alternative
+			# TODO: find an alternative to deal with pipefail
 			set +o pipefail;
 
 			# Creating an empty file with the final columns
