@@ -1,4 +1,4 @@
-# Genome-wide maps of enhancer regulation connect risk variants to disease genes
+# ABC-Max: Genome-wide maps of enhancer regulation connect risk variants to disease genes
 
 This repository contains a reproducible workflow for connecting non-coding variants to their target genes through enhancer-gene maps. The workflow has been implemented as a snakemake pipeline and can be run for any set of E-G predictions and variants or credible sets. By default, the pipeline uses the genome-wide Activity-by-Contact (ABC) E-G maps across 131 cell types from Nasser et al. 2020 (https://www.biorxiv.org/content/10.1101/2020.09.01.278093v1.full). This pipeline can be run to reproduce the main results presented in Nasser et al. 2020.
 
