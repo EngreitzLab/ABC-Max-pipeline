@@ -403,10 +403,10 @@ pred.cols <- list(
 #
 
 # TODO: Do not add the gene lists
-# TODO: use score instead of PP
+# TODO: use score instead of PP, DONE
 # TODO: if a score thredhold is not provided, use all variants
 if(!is.null(sigScore.cs)){
-  gp.sigScore <- getGenePrioritizationTable(sigScore.flat, sigScore.cs, genes, genes.uniq, sorted.cells, cell.type.annot, cell.bins, var.score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold)
+  gp.sigScore <- getGenePrioritizationTable(sigScore.flat, sigScore.cs, genes, genes.uniq, sorted.cells, cell.type.annot, cell.bins, score.col=opt$predScore, var.score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold)
   #gp.sigScore <- addE2GMethodsToGP(gp.sigScore, alt.overlap, opt$variantScoreThreshold))
   write.tab(gp.sigScore, file=paste0(opt$outbase,"GenePredictions.tsv"))
   best.genes.sigScore <- getBestGenesFromPrioritizitionTable(gp.sigScore, pred.col.stats)
@@ -423,7 +423,7 @@ if(!is.null(sigScore.cs)){
   stats$all$`E-G distance for best 2 genes - max` <- quantile(subset(sigScore.flat, TargetGene %in% best.genes.sigScore & get(opt$variantScoreCol) >= opt$variantScoreThreshold)$distance, 1)
   stats$all$`E-G distance for best 2 genes - mean` <- mean(subset(sigScore.flat, TargetGene %in% best.genes.sigScore & get(opt$variantScoreCol) >= opt$variantScoreThreshold)$distance)
   
-  gp.all <- getGenePrioritizationTable(all.flat, all.cs, genes, genes.uniq, sorted.cells, cell.type.annot, cell.bins, var.score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold)
+  gp.all <- getGenePrioritizationTable(all.flat, all.cs, genes, genes.uniq, sorted.cells, cell.type.annot, cell.bins, score.col=opt$predScore, var.score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold)
   #gp.all <- addE2GMethodsToGP(gp.all, alt.overlap, opt$posteriorProb)
   write.tab(gp.all, file=paste0(opt$outbase,"GenePredictions.all.tsv"))
   best.genes.all <- getBestGenesFromPrioritizitionTable(gp.all)
@@ -432,12 +432,12 @@ if(!is.null(sigScore.cs)){
   write.tab(gene.list.comparison, file=paste0(opt$outbase, "GenePredictions.all.GeneListComparison.tsv"))
 } else {
   # TODO: refactor
-  gp.all <- getGenePrioritizationTable(all.flat, all.cs, genes, genes.uniq, sorted.cells, cell.type.annot, cell.bins, gene.lists, score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold)
+  gp.all <- getGenePrioritizationTable(all.flat, all.cs, genes, genes.uniq, sorted.cells, cell.type.annot, cell.bins, score.col=opt$predScore, score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold)
   #gp.all <- addE2GMethodsToGP(gp.all, alt.overlap, opt$posteriorProb)
   write.tab(gp.all, file=paste0(opt$outbase,"GenePredictions.all.tsv"))
   best.genes.all <- getBestGenesFromPrioritizitionTable(gp.all)
   write.tab(best.genes.all, file=paste0(opt$outbase, "GenePredictions.all.Best2Genes.tsv"), col.names=F)
-  gene.list.comparison <- compareABCPredictionsToGeneLists(gp.all, cell.bins, pred.cols=pred.cols[names(pred.cols) %in% colnames(gp.sigScore)])
+  gene.list.comparison <- compareABCPredictionsToGeneLists(gp.all, cell.bins, pred.cols=pred.cols[names(pred.cols) %in% colnames(gp.all)])
   write.tab(gene.list.comparison, file=paste0(opt$outbase, "GenePredictions.all.GeneListComparison.tsv"))
   
   pair.stats <- getGeneCellTypePairAnalysis(all.flat, gp.all, "ConnectionStrengthRank", 1, cell.type.annot, unique.cell.col="Categorical.CellTypeMerged")
@@ -456,26 +456,15 @@ if(!is.null(sigScore.cs)){
 abcmax <- getABCMaxTable(gp.all, all.flat, cell.type.annot, score.col=opt$variantScoreCol, min.score=opt$variantScoreThreshold)
 write.tab(abcmax, file=paste0(opt$outbase, "GenePredictions.ABCMaxSummary.tsv"))
 
-## Repeat using promoter activity-weighted score for ranking, rather than ABC score
-#gp.sigScore.pw <- getGenePrioritizationTable(filter.flat, filter.cs, genes, genes.uniq, sorted.cells, cell.type.annot, cell.bins, gene.lists, min.pp=opt$posteriorProb, score.col="ABCWeightedByPromoter")
-#write.tab(gp.sigScore.pw, file=paste0(opt$outbase,"GenePredictions.PromoterWeighted.tsv"))
-#best.genes.sigScore.pw <- getBestGenesFromPrioritizitionTable(gp.sigScore.pw)
-#write.tab(best.genes.sigScore.pw, file=paste0(opt$outbase, "GenePredictions.PromoterWeighted.Best2Genes.tsv"), col.names=F)
-#gene.list.comparison.pw <- compareABCPredictionsToGeneLists(gp.sigScore.pw, cell.bins)
-#write.tab(gene.list.comparison.pw, file=paste0(opt$outbase, "GenePredictions.PromoterWeighted.GeneListComparison.tsv"))
-
 saveProgress()
-
 
 #############################################################################
 ## To do: 
 ##  Count genes that have multiple independent variants pointing to them in the
 ##  same cell type
 # TODO: get tissue annotation column from the argument parser, if needed
-# TODO: Change ABC.Score/Score.Fraction to whatever is selected
+# TODO: Change ABC.Score/Score.Fraction to whatever is selected, DONE
 #tmp <- merge(filter.flat, cell.type.annot[,c("CellType","Categorical.IBDTissueAnnotations")])
-
-#opt$predScore
 
 if (!is.null(opt$tissueCategory)){
   tmp <- merge(filter.flat, cell.type.annot[,c("CellType", opt$tissueCategory)])

@@ -648,11 +648,11 @@ getGenePrioritizationTable <- function(
   all.clean, all.cs, 
   genes, genes.uniq, 
   cell.types, cell.type.annot, cell.bins, 
-  #gene.lists=list(), 
+  #gene.lists=list(),
+  score.col="ABC.Score",
   var.score.col="PosteriorProb",
   min.score=0.1, 
   distance=1000000, 
-  score.col="ABC.Score", 
   contact.col="hic.distance.adj") {
   ## Make an integrated gene table for prioritization comparisons
   ## For each credible set, list each gene that is either within the specified distance or is
