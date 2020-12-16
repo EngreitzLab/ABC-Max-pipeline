@@ -48,8 +48,13 @@ Credible set list (csList)
 ## Dependencies
 
 TODO: R packages as an renv?
-Dependencies for running the snakemake workflow are distributed as a Conda environment (ABC-Max_env.yaml). Additionally, the following R packages are required:
+Dependencies for running the snakemake workflow are distributed as a Conda environment (ABC-Max_env.yaml). 
+* snakemake
+
+Additionally, the following R packages are required:
 * optparse
+* R utils
+* data.table
 * dplyr
 * tidyr
 * ggplot2

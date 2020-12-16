@@ -67,8 +67,8 @@ getCodingGenes <- function(genes=NULL, genes.uniq=NULL) {
 
 filterVariantOverlap <- function(overlap, cutoff, tss.cutoff, hk.list) {
   ## Implements a different cutoff for distal enhancers versus distal promoters
-  overlap <- overlap %>% filter( (((class != "tss" & class != "promoter") | isOwnTSS) & Score.Fraction >= cutoff) | 
-                                   ((class == "tss" | class == "promoter") & Score.Fraction >= tss.cutoff)) %>% filter( !(TargetGene %in% hk.list) )
+  overlap <- overlap %>% filter( (((class != "tss" & class != "promoter") | isOwnTSS) & ABC.Score >= cutoff) | 
+                                   ((class == "tss" | class == "promoter") & ABC.Score >= tss.cutoff)) %>% filter( !(TargetGene %in% hk.list) )
   return(overlap)
 }
 
@@ -85,10 +85,10 @@ addPromoterWeightedPrediction <- function(overlap, promoter.activity.ref.file, a
   promoter.activity <- promoter.activity * 100 / max(promoter.activity)
   
   ## Index into activity
-  overlap$TargetGeneTSSActivity <- rev(promoter.activity)[round(length(promoter.activity)*overlap$TargetGeneTSSActivityQuantile)]
+  overlap$TargetGeneTSSActivity <- rev(promoter.activity)[round(length(promoter.activity)*overlap$TargetGenePromoterActivityQuantile)]
   
   ## This metric: range 0-100;  100 = enhancer is predicted to explain an absolute amount of transcription equal to most highly transcribed gene in genome
-  overlap$ABCWeightedByPromoter <- with(overlap, Score.Fraction * TargetGeneTSSActivity)
+  overlap$ABCWeightedByPromoter <- with(overlap, ABC.Score * TargetGeneTSSActivity)
   
   return(overlap)
 }
@@ -122,14 +122,14 @@ loadOneGeneList <- function(file) {
 ## Functions for making and loading data from permutation tables written by MakeVariantCountTables.R
 
 # Changed to use score col instead of PP
-# Changed Score.Fraction to ABC.score, is this correct?
+# Changed ABC.Score to ABC.score, is this correct?
 # TODO: use column name based on selection
 getVariantByCellsTable <- function(overlap, score.col="PosteriorProb") {
   variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), max.ABC=max(ABC.Score), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
   return(variant.by.cells)
 }
 
-# Changed Score.Fraction to ABC.score
+# Changed ABC.Score to ABC.score
 # TODO: use column name based on selection
 getVariantByGenesTable <- function(overlap) {
   variant.by.genes <- overlap %>% group_by(QueryRegionName,TargetGene) %>% summarise( n.cells=n(), max.ABC=max(ABC.Score), CellTypes=paste0(CellType,collapse=',')) %>% as.data.frame()
@@ -223,7 +223,7 @@ computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type
   # If a score threshold is probivided, selecting significant variants. Else, using all variants.
   # TODO: require promoter column?
   if (!(is.null(min.score))){
-    hi.vars <- subset(variant.list, get(score.col) >= min.score))$variant
+    hi.vars <- subset(variant.list, get(score.col) >= min.score)$variant
   } else {
     hi.vars <- variant.list$variant
   }
@@ -383,7 +383,7 @@ getCellTypeSpecificityEnrichments <- function(flat, variant.list, cellTypeCov, s
       lovals <- padZeros(specificityScores.lo[,ct], n.loPp)
       #  y <- c(hivals, lovals)
       #  A <- factor(rep(c('hi','lo'),c(n.hiPp,n.loPp)))
-      wilcox.test(hivals, lovals, alternative="greater", na.rm=T)$p.value
+      wilcox.test(hivals, lovals, alternative="greater", na.rm=T, paired=TRUE)$p.value
       #  #wilcox_test(y~A, alternative="greater", distribution="exact") %>% pvalue() %>% as.numeric()
     }),
     spec.hiVsLo.pPerm=sapply(sharedCellTypes, function(ct)
@@ -406,7 +406,7 @@ getCellTypeSpecificityEnrichments <- function(flat, variant.list, cellTypeCov, s
                spec.GenomeBackground=bkgroundsum,
                spec.vsGenome.enrichment=(sum(currScores)/n.hiPp) / bkgroundsum,
                #spec.vsGenome.p.T=t.test(hivals, background.ct, alternative="greater")$p.value,
-               spec.vsGenome.p.Wilcox=wilcox.test(hivals, background.ct, alternative="greater")$p.value)
+               spec.vsGenome.p.Wilcox=wilcox.test(hivals, background.ct, paired=TRUE, alternative="greater")$p.value)
     #vsGenome.pPerm=testMeanByPermutation(currScores, background.ct, totalObs=n.hiPp, totalBackground=nBackground, nPerm=nPerm))
   }))
   result <- merge(result, res.vsGenome)
@@ -423,7 +423,7 @@ plotCellTypeEnrichmentBarplots <- function(dat, color.cols, main="", ...) {
   }
 }
 
-# TODO: fix log10.p, group_by_
+# TODO: fix log10.p
 plotCellTypeEnrichmentBarplot <- function(dat, color.col, sort.by.group=TRUE, main="") {
   to.plot <- subset(dat, !is.na(get(color.col)) & !is.na(log10.p))
   
@@ -431,7 +431,7 @@ plotCellTypeEnrichmentBarplot <- function(dat, color.col, sort.by.group=TRUE, ma
   to.plot$color <- rainbow(length(levels(to.plot[[color.col]])))[as.numeric(to.plot[[color.col]])]
   
   if (sort.by.group) {
-    to.plot <- to.plot %>% group_by_(color.col) %>% arrange(log10.p) %>% ungroup() %>% as.data.frame()
+    to.plot <- to.plot %>% group_by(!!as.name(color.col)) %>% arrange(log10.p) %>% ungroup() %>% as.data.frame()
     to.plot$labels <- ""
     for (cat in unique(to.plot[[color.col]])) to.plot$labels[ round(median(which(to.plot[[color.col]] == cat))) ] <- cat
   } else {
@@ -446,32 +446,32 @@ plotCellTypeEnrichmentBarplot <- function(dat, color.col, sort.by.group=TRUE, ma
   abline(h=-log10(0.05), lty=2, col='gray')
   
   enrich.plot <- to.plot
-  if (sort.by.group) enrich.plot <- to.plot %>% group_by_(.dots=color.col) %>% arrange(enrichment) %>% ungroup() %>% as.data.frame()
+  if (sort.by.group) enrich.plot <- to.plot %>% group_by(!!as.name(color.col)) %>% arrange(enrichment) %>% ungroup() %>% as.data.frame()
   else enrich.plot <- to.plot %>% arrange(enrichment) %>% as.data.frame()
   b <- with(enrich.plot, barplot(enrichment, col=color, border=NA, las=2, names.arg=labels, ylab='Enrichment (high vs low PP)', main=main))
   abline(h=1, lty=2, col='gray')
   
   if (all(c("vsGenome.log10pBinom","vsGenome.enrichment") %in% colnames(to.plot))) {
-    if (sort.by.group) to.plot <- to.plot %>% group_by_(.dots=color.col) %>% arrange(-vsGenome.log10pBinom) %>% ungroup() %>% as.data.frame()
+    if (sort.by.group) to.plot <- to.plot %>% group_by(!!as.name(color.col)) %>% arrange(-vsGenome.log10pBinom) %>% ungroup() %>% as.data.frame()
     else to.plot <- to.plot %>% arrange(-vsGenome.log10pBinom) %>% as.data.frame()
     b <- with(to.plot, barplot(-log10(p.adjust(10^vsGenome.log10pBinom)), col=color, border=NA, las=2, names.arg=labels, ylab='-log10 vsGenome p_binom BH-corrected', ...))
     abline(h=-log10(0.05), lty=2, col='gray')
     
     enrich.plot <- to.plot
-    if (sort.by.group) enrich.plot <- to.plot %>% group_by_(.dots=color.col) %>% arrange(vsGenome.enrichment) %>% ungroup() %>% as.data.frame()
+    if (sort.by.group) enrich.plot <- to.plot %>% group_by(!!as.name(color.col)) %>% arrange(vsGenome.enrichment) %>% ungroup() %>% as.data.frame()
     else enrich.plot <- to.plot %>% arrange(vsGenome.enrichment) %>% as.data.frame()
     b <- with(enrich.plot, barplot(vsGenome.enrichment, col=color, border=NA, las=2, names.arg=labels, ylab='Enrichment (high PP vs genome)', main=main))
     abline(h=1, lty=2, col='gray')
   }
   
   if (all(c("LDSC.Enrichment_p","LDSC.Enrichment") %in% colnames(to.plot))) {
-    if (sort.by.group) to.plot <- to.plot %>% group_by_(.dots=color.col) %>% arrange(-LDSC.Enrichment_p) %>% ungroup() %>% as.data.frame()
+    if (sort.by.group) to.plot <- to.plot %>% group_by(!!as.name(color.col)) %>% arrange(-LDSC.Enrichment_p) %>% ungroup() %>% as.data.frame()
     else to.plot <- to.plot %>% arrange(-LDSC.Enrichment_p) %>% as.data.frame()
     b <- with(to.plot, barplot(-log10(LDSC.Enrichment_p), col=color, border=NA, las=2, names.arg=labels, ylab='-log10 LDSC p', ...))
     abline(h=-log10(0.05), lty=2, col='gray')
     
     enrich.plot <- to.plot
-    if (sort.by.group) enrich.plot <- to.plot %>% group_by_(.dots=color.col) %>% arrange(LDSC.Enrichment) %>% ungroup() %>% as.data.frame()
+    if (sort.by.group) enrich.plot <- to.plot %>% group_by(!!as.name(color.col)) %>% arrange(LDSC.Enrichment) %>% ungroup() %>% as.data.frame()
     else enrich.plot <- to.plot %>% arrange(LDSC.Enrichment) %>% as.data.frame()
     b <- with(enrich.plot, barplot(LDSC.Enrichment, col=color, border=NA, las=2, names.arg=labels, ylab='Enrichment (%Heritability / %SNPs)', ...))
     abline(h=1, lty=2, col='gray')
@@ -606,7 +606,7 @@ plotGeneByCellTypeHeatmap <- function(cs.name, filter.flat, variant.list, genes,
       cat(paste0("Found gene that doesn't match: ", target.gene, "\n"))
     } else {
       tryCatch({
-        tab[curr.pred[i,"CellType"], target.gene] <- curr.pred[i,"Score.Fraction"]*100
+        tab[curr.pred[i,"CellType"], target.gene] <- curr.pred[i,"ABC.Score"]*100
       }, error = function(e) { print("Caught in plotGeneByCellTypeHeatmap"); browser() })
     }
   }
@@ -643,7 +643,7 @@ plotCellTypeHeatmap <- function(tab, ...) {
 
 # Using score.col and min.score instead of min.PP
 # TODO: refactor
-# "Score.Fraction" = "ABC.Score"
+# "ABC.Score" = "ABC.Score"
 getGenePrioritizationTable <- function(
   all.clean, all.cs, 
   genes, genes.uniq, 
@@ -653,7 +653,7 @@ getGenePrioritizationTable <- function(
   var.score.col="PosteriorProb",
   min.score=0.1, 
   distance=1000000, 
-  contact.col="hic.distance.adj") {
+  contact.col="hic_contact_pl_scaled_adj") {
   ## Make an integrated gene table for prioritization comparisons
   ## For each credible set, list each gene that is either within the specified distance or is
   ##  connected by ABC. Compute various prioritization metrics for each gene
@@ -696,10 +696,11 @@ getGenePrioritizationTable <- function(
                                     tmpgene <- subset(genes.uniq, name == gene)[1,,drop=F]
                                     startdist <- tmpgene$start - pos
                                     enddist <- tmpgene$end - pos
-                                    if (sign(startdist) != sign(enddist)) 
-                                      return(0)
-                                    else 
+                                    if (sign(startdist) != sign(enddist)) { 
+		  		      return(0) }
+                                    else {
                                       return(min(abs(startdist), abs(enddist)))
+				    }
                                   })
                                   annot <- annot %>% group_by(CredibleSet, add=FALSE) %>% mutate(DistanceToGeneBodyRank=rank(GeneBodyDistanceToBestSNP)) %>% as.data.frame() 
                                   
@@ -722,6 +723,7 @@ getGenePrioritizationTable <- function(
                                       annot[[paste0("CellTypeCount.",bin)]] <- apply(mat[,curr.cells,drop=F], 1, function(row) sum(row != 0))
                                     }
                                   } else {
+			            print("nrow(mat) seems to be smaller than 0")
                                     return(NULL)
                                   }
                                   
@@ -783,7 +785,7 @@ getABCMaxTable <- function(gp, all.flat, cell.type.annot, score.col=opt$variantS
   }
 
 getBestGenesFromPrioritizitionTable <- function(gp, pred.col.stats="ConnectionStrengthRank", top.ranks=1:2) {
-  return(unique(subset(gp[,c(pred.col.stats,"TargetGene")], get(pred.col.stats) %in% top.ranks)$TargetGene))
+  return(unique(subset(gp[c(pred.col.stats,"TargetGene")], get(pred.col.stats) %in% top.ranks)$TargetGene))
 }
 
 reshapeGenePrioritizationTable <- function(gp, all.cs, ranks=1:3) {
@@ -932,10 +934,10 @@ getCellTypeSpecificityStats <- function(flat, best.genes, gex, score.col=NULL, m
   # If no score threshold is provided, using all variants
   if (!is.null(score.col) & !is.null(min.score)){
     cts <- as.data.frame(subset(flat, get(score.col) >= min.score & TargetGene %in% best.genes) %>% group_by(QueryRegionName,TargetGene) %>% tally())
-    ctsExpressedMid <- as.data.frame(subset(flat, get(score.col) >= min.score  & TargetGene %in% best.genes & TargetGeneTSSActivityQuantile >= 0.7) %>% group_by(QueryRegionName,TargetGene) %>% tally())
+    ctsExpressedMid <- as.data.frame(subset(flat, get(score.col) >= min.score  & TargetGene %in% best.genes & TargetGenePromoterActivityQuantile >= 0.7) %>% group_by(QueryRegionName,TargetGene) %>% tally())
   } else {
     cts <- as.data.frame(subset(flat, TargetGene %in% best.genes) %>% group_by(QueryRegionName,TargetGene) %>% tally())
-    ctsExpressedMid <- as.data.frame(subset(flat, TargetGene %in% best.genes & TargetGeneTSSActivityQuantile >= 0.7) %>% group_by(QueryRegionName,TargetGene) %>% tally())
+    ctsExpressedMid <- as.data.frame(subset(flat, TargetGene %in% best.genes & TargetGenePromoterActivityQuantile >= 0.7) %>% group_by(QueryRegionName,TargetGene) %>% tally())
   }
   cts <- merge(cts, ctsExpressedMid, by=c("QueryRegionName","TargetGene"), all.x=T)
   colnames(cts)[colnames(cts) == "n.x"] <- "nPredWhenExpressed"
@@ -1010,11 +1012,11 @@ plotVariantHistograms <- function(flat, variant.list, cs, score.col, min.score, 
 ## Properties of enhancers
 
 getEnhancerProperties <- function(flat, variant.list.filter) {
-  flat$Activity <- with(flat, sqrt(normalized_dhs * normalized_h3k27ac))
+  #flat$Activity <- with(flat, sqrt(normalized_dhs * normalized_h3k27ac))
   v.stats <- flat %>% group_by(QueryRegionName) %>% summarize(
     maxA=max(activity_base), 
-    maxC=max(hic.distance.adj), 
-    maxABC=max(Score.Fraction),
+    maxC=max(hic_contact_pl_scaled_adj), 
+    maxABC=max(ABC.Score),
     nGenes=length(unique(TargetGene)), 
     nCellTypes=length(unique(CellType)), 
     minDistance=min(distance), 
@@ -1642,7 +1644,7 @@ if (FALSE) {
   
   filterPredictions <- function(pred.flat, filter.cs, tss.cutoff=0.1, require.gex=FALSE) {
     ## Implements a different cutoff for distal enhancers versus distal promoters
-    all.flat <- subset(pred.flat, ( (!is.na(GeneExpression) | !require.gex) & Score.Fraction >= opt$cutoffLenient & ((class != "tss" & class != "promoter") | isOwnTSS)) | (Score.Fraction >= tss.cutoff & (class == "tss" | class == "promoter")))
+    all.flat <- subset(pred.flat, ( (!is.na(GeneExpression) | !require.gex) & ABC.Score >= opt$cutoffLenient & ((class != "tss" & class != "promoter") | isOwnTSS)) | (Score.Fraction >= tss.cutoff & (class == "tss" | class == "promoter")))
     filter.flat <- subset(all.flat, CredibleSet %in% as.character(as.matrix(filter.cs$CredibleSet)))
     return(list(all=all.flat, filter=filter.flat))
   }
@@ -1660,7 +1662,7 @@ if (FALSE) {
     variant.overlaps <- do.call(rbind, lapply(as.character(as.matrix(variants)), function(variant) getPredictionsForVariant(variant, pred)))
     if (!is.null(variant.overlaps)) { 
       variant.overlaps$CredibleSet <- name
-      result <- subset(variant.overlaps, (Score.Fraction >= fraction.cutoff) | (Score >= abs.cutoff))
+      result <- subset(variant.overlaps, (ABC.Score >= fraction.cutoff) | (Score >= abs.cutoff))
       if (nrow(result) == 0) return(NULL)
       return(result)
     } 
@@ -1696,7 +1698,7 @@ if (FALSE) {
   getCredibleSetVariants <- function(cs, fraction.cutoff=NULL, abs.cutoff=NULL) {
     cs$QueryRegionName <- as.character(as.matrix(cs$QueryRegionName))
     if (length(cs) > 0) {
-      if (!is.null(fraction.cutoff)) cs <- subset(cs, Score.Fraction >= fraction.cutoff)
+      if (!is.null(fraction.cutoff)) cs <- subset(cs, ABC.Score >= fraction.cutoff)
       if (!is.null(abs.cutoff)) cs <- subset(cs, Score >= abs.cutoff)
     }
     if (length(cs) > 0) table(cs[,c("QueryRegionName","CellType")])
@@ -1705,7 +1707,7 @@ if (FALSE) {
   getCredibleSetGenes <- function(cs, fraction.cutoff=NULL, abs.cutoff=NULL) {
     ## Number of enhancers regulating each gene
     if (length(cs) > 0) {
-      if (!is.null(fraction.cutoff)) cs <- subset(cs, Score.Fraction >= fraction.cutoff)
+      if (!is.null(fraction.cutoff)) cs <- subset(cs, ABC.Score >= fraction.cutoff)
       if (!is.null(abs.cutoff)) cs <- subset(cs, Score >= abs.cutoff)
     }
     if (length(cs) > 0) with(cs[!duplicated(cs[,c("TargetGene","name","CellType")]),], table(as.matrix(TargetGene), CellType))
@@ -1714,7 +1716,7 @@ if (FALSE) {
   getCredibleSetElements <- function(cs, fraction.cutoff=NULL, abs.cutoff=NULL) {
     ## Tally of affected elements per cell type
     if (length(cs) > 0) {
-      if (!is.null(fraction.cutoff)) cs <- subset(cs, Score.Fraction >= fraction.cutoff)
+      if (!is.null(fraction.cutoff)) cs <- subset(cs, ABC.Score >= fraction.cutoff)
       if (!is.null(abs.cutoff)) cs <- subset(cs, Score >= abs.cutoff)
     }
     if (length(cs) > 0) with(cs[!duplicated(cs[,c("name","CellType")]),], table(as.matrix(name), CellType))
@@ -1723,7 +1725,7 @@ if (FALSE) {
   getCredibleSetElementsPerCellType <- function(cs, fraction.cutoff=NULL, abs.cutoff=NULL) {
     ## Number of affected elements per cell type
     if (length(cs) > 0) {
-      if (!is.null(fraction.cutoff)) cs <- subset(cs, Score.Fraction >= fraction.cutoff)
+      if (!is.null(fraction.cutoff)) cs <- subset(cs, ABC.Score >= fraction.cutoff)
       if (!is.null(abs.cutoff)) cs <- subset(cs, Score >= abs.cutoff)
     }
     if (length(cs) > 0) apply(getCredibleSetElements(cs), 2, sum)
@@ -1732,7 +1734,7 @@ if (FALSE) {
   getCredibleSetCellTypes <- function(cs, fraction.cutoff=NULL, abs.cutoff=NULL) {
     #if (length(cs) > 0) 
     if (length(cs) > 0) {
-      if (!is.null(fraction.cutoff)) cs <- subset(cs, Score.Fraction >= fraction.cutoff)
+      if (!is.null(fraction.cutoff)) cs <- subset(cs, ABC.Score >= fraction.cutoff)
       if (!is.null(abs.cutoff)) cs <- subset(cs, Score >= abs.cutoff)
     }
     if (length(cs) > 0) unique(cs$CellType)
@@ -1953,7 +1955,7 @@ if (FALSE) {
         cat(paste0("Found gene that doesn't match: ", target.gene, "\n"))
       } else {
         tryCatch({
-          tab[curr.pred[i,"CellType"], target.gene] <- curr.pred[i,"Score.Fraction"]*100
+          tab[curr.pred[i,"CellType"], target.gene] <- curr.pred[i,"ABC.Score"]*100
         }, error = function(e) { print("Caught in plotGeneByCellTypeHeatmap"); browser() })
       }
     }
@@ -1981,7 +1983,7 @@ if (FALSE) {
       if (!(variant %in% colnames(tab))) {
         print(paste0("Skipping ", variant, " because variant is not found"))
       } else {
-        tab[curr.pred[i,"CellType"], variant] <- curr.pred[i,"Score.Fraction"]*100
+        tab[curr.pred[i,"CellType"], variant] <- curr.pred[i,"ABC.Score"]*100
       }
     }
     
@@ -2013,7 +2015,7 @@ if (FALSE) {
       } else if (!(variant %in% colnames(tab))) {
         print(paste0("Skipping ", variant, " because variant is not found"))
       } else {
-        tab[target.gene, variant] <- curr.pred[i,"Score.Fraction"]*100
+        tab[target.gene, variant] <- curr.pred[i,"ABC.Score"]*100
       }
     }
     
@@ -2090,7 +2092,7 @@ if (FALSE) {
     curr.pred <- subset(all.flat, CredibleSet %in% credible.sets$CredibleSet & CellType %in% cell.lines)
     
     if (is.null(genes)) {
-      predictions <- dcast(curr.pred[,c("CellType","TargetGene","Score.Fraction")], CellType ~ TargetGene, mean, value.var="Score.Fraction")
+      predictions <- dcast(curr.pred[,c("CellType","TargetGene","ABC.Score")], CellType ~ TargetGene, mean, value.var="Score.Fraction")
       rownames(predictions) <- predictions$CellType
       return(list(predictions=t(predictions[,-1]), gex=gex[colnames(predictions),predictions$CellType]))
     } else {
@@ -2103,7 +2105,7 @@ if (FALSE) {
       colnames(predictions) <- cell.lines
       for (i in 1:nrow(curr.pred)) {
         predictions[as.character(as.matrix(curr.pred$TargetGene[i])), 
-                    as.character(as.matrix(curr.pred$CellType[i]))] <- curr.pred$Score.Fraction[i]
+                    as.character(as.matrix(curr.pred$CellType[i]))] <- curr.pred$ABC.Score[i]
       }
       #browser()
       return(list(predictions=predictions, gex=gex[rownames(predictions), colnames(predictions)], CredibleSets=credible.sets$CredibleSet))
@@ -2122,7 +2124,7 @@ if (FALSE) {
       g[,paste0("TPM.",cell.type)] <- m$gex[g$name,cell.type]
     }
     for (cell.type in cell.lines) {
-      g[,paste0("Score.Fraction.",cell.type)] <- m$predictions[g$name,cell.type]
+      g[,paste0("ABC.Score.",cell.type)] <- m$predictions[g$name,cell.type]
     }
     
     g$CredibleSets <- NA
