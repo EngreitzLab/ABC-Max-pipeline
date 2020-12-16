@@ -73,7 +73,7 @@ suppressPackageStartupMessages(source(paste0(opt$codeDir, "CredibleSetTools.R"))
 
 # Function to save progress
 saveProgress <- function() save.image(file=paste0(opt$outbase,"AnnotateCredibleSets.RData"))
-#saveProgress()
+saveProgress()
 
 ##############################################################################
 ## Load common data
@@ -128,7 +128,6 @@ if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
 if (opt$isABC){
   predColMap <- if (!is.null(opt$predColMap)) read.delim(opt$predColMap, stringsAsFactors=F) else NULL
   overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, colMap=predColMap)
-  write.tab(overlap, file=paste0(opt$outbase, "overlap.tsv"))
   overlap <- filterVariantOverlap(overlap, opt$cutoff, opt$cutoffTss, hk.list)  
   overlap <- addPromoterWeightedPrediction(overlap, opt$promoterActivityRef)
 } else {
@@ -172,12 +171,12 @@ trait <- opt$trait
 #}
 
 # Creating an output directory and writing the result to files
-#dir.create(paste0(opt$outbase,"data/"))
-#write.tab(all.flat, file=paste0(opt$outbase, "data/all.flat.tsv"))
-#write.tab(filter.flat, file=paste0(opt$outbase, "data/filter.flat.tsv"))
-#if (!(is.null(sigScore.flat))) {
-#  write.tab(sigScore.flat, file=paste0(opt$outbase, "data/sigScore.flat.tsv"))
-#}
+dir.create(paste0(opt$outbase,"data/"))
+write.tab(all.flat, file=paste0(opt$outbase, "data/all.flat.tsv"))
+write.tab(filter.flat, file=paste0(opt$outbase, "data/filter.flat.tsv"))
+if (!(is.null(sigScore.flat))) {
+  write.tab(sigScore.flat, file=paste0(opt$outbase, "data/sigScore.flat.tsv"))
+}
 
 # Reading in the gene TSS activity quantile information
 gex <- read.delim(opt$gex, check.names=F)
@@ -231,15 +230,15 @@ bgVars <- read.delim(gzfile(opt$backgroundVariants), check.names=F, header=F)
 # Use the set of background variants instead of ctrlPP
 # Remove the column from output that uses ctrlPP
 #if (!is.null(opt$ctrlProb)) {
-#edir <- paste0(opt$outbase, "enrichment/")
-#dir.create(edir)
+edir <- paste0(opt$outbase, "enrichment/")
+dir.create(edir)
 
-#pdf(file=paste0(opt$outbase, "Enrichment.CellType.vsScore.pdf"), width=5, height=5)
+pdf(file=paste0(opt$outbase, "Enrichment.CellType.vsScore.pdf"), width=5, height=5)
 # Note: assuming one trait
 #for (trait in unique(variant.list.filter$Disease)) {
 #  tryCatch({
 #curr.vl <- subset(variant.list.filter, Disease==trait)
-#variant.by.cells <- getVariantByCellsTable(filter.flat)
+variant.by.cells <- getVariantByCellsTable(filter.flat)
 # TODO: use bgVars instead of ctrlPP, DONE
 # TODO: change "variant" column to rsID?
 # TODO: if the prediction file includes a column "Promoter" that has both TRUE 
@@ -277,8 +276,8 @@ cell.categories <- colnames(cell.type.annot)[grepl("Categorical.", colnames(cell
 # TODO: the grouped barplots are broken
 for (cat in cell.categories) {
   ## Aggregate for each of the cell type categories
-#  plotCellTypeEnrichmentBarplot(enrich, cat, main=paste(trait, cat), sort.by.group=TRUE)
-#  plotCellTypeEnrichmentBarplot(enrich, cat, main=paste(trait, cat), sort.by.group=FALSE)
+  plotCellTypeEnrichmentBarplot(enrich, cat, main=paste(trait, cat), sort.by.group=TRUE)
+  plotCellTypeEnrichmentBarplot(enrich, cat, main=paste(trait, cat), sort.by.group=FALSE)
   
   # TODO: use score.col and bgVars
   enrich.grouped <- computeCellTypeEnrichment(variant.by.cells, variant.list.filter, 
@@ -286,13 +285,13 @@ for (cat in cell.categories) {
                                               score.col=opt$variantScoreCol,
                                               min.score=opt$variantScoreThreshold,
                                               bg.vars=bgVars) # NOT SUPPORTED YET, ldsc=ldsc[[trait]])
-#  write.tab(enrich.grouped, file=paste0(edir, "/Enrichment.CellType.vsScore.", trait, ".", cat, ".tsv"))    
+  write.tab(enrich.grouped, file=paste0(edir, "/Enrichment.CellType.vsScore.", trait, ".", cat, ".tsv"))    
   # TODO: change plot axis label
-#  plotCellTypeEnrichmentBarplot(enrich.grouped, color.col="CellType", sort.by.group=TRUE, main=paste(trait, cat))
+  plotCellTypeEnrichmentBarplot(enrich.grouped, color.col="CellType", sort.by.group=TRUE, main=paste(trait, cat))
   # }
   }#, error = function(e) { print(e); print(paste0("Failed enrichment barplots for ", trait)) })
 #}
-#dev.off()
+dev.off()
 
 
 
@@ -308,19 +307,19 @@ cell.type.annot <- merge(cell.type.annot, bgOverlapPerCelltype, by="CellType")
 
 # What to do with these cell.bins?
 cell.bins <- colnames(cell.type.annot)[grepl("Binary.", colnames(cell.type.annot))]
-#write.tab(cell.type.annot, file=paste0(opt$outbase,"CellTypes.Annotated.txt"))
+write.tab(cell.type.annot, file=paste0(opt$outbase,"CellTypes.Annotated.txt"))
 
-#saveProgress()
+saveProgress()
 
 # TODO: if an option is provided on command line, create these barplots
-#pdf(file=paste0(opt$outbase, "OverlapGroupedByPosteriorProb.pdf"), height=6, width=8)
-#posterior.prob.breaks <- c(0,0.001,0.01,0.1,1)
-#for (cat in c(cell.categories, cell.bins)) {
-#  tryCatch({
-#    freq <- plotOverlapByPosteriorProb(variant.list.filter, filter.flat, posterior.prob.breaks, cell.type.annot, cat)
-#  }, error = function(e) print(paste0("Failed plotOverlapByPosteriorProb for category ", cat, "; ", e)))
-#}
-#dev.off()
+pdf(file=paste0(opt$outbase, "OverlapGroupedByPosteriorProb.pdf"), height=6, width=8)
+posterior.prob.breaks <- c(0,0.001,0.01,0.1,1)
+for (cat in c(cell.categories, cell.bins)) {
+  tryCatch({
+    freq <- plotOverlapByPosteriorProb(variant.list.filter, filter.flat, posterior.prob.breaks, cell.type.annot, cat)
+  }, error = function(e) print(paste0("Failed plotOverlapByPosteriorProb for category ", cat, "; ", e)))
+}
+dev.off()
 
 
 ##############################################################################
@@ -369,14 +368,14 @@ plotCredibleSetHeatmaps <- function(flat, cs, v.list, score.col=NULL, score.cuto
 
 # If a variant score threhold was provided, running for significant variants.
 # Else, using all variants
-#if (!is.null(sigScore.cs)){
-#  print("grabbing sigScore.cs")
-#  sorted.cells <- plotCredibleSetHeatmaps(sigScore.flat, sigScore.cs, variant.list.sigScore, score.col=opt$variantScoreCol, score.cutoff=opt$variantScoreThreshold)
+if (!is.null(sigScore.cs)){
+  print("grabbing sigScore.cs")
+  sorted.cells <- plotCredibleSetHeatmaps(sigScore.flat, sigScore.cs, variant.list.sigScore, score.col=opt$variantScoreCol, score.cutoff=opt$variantScoreThreshold)
   #sorted.cells <- plotCredibleSetHeatmaps(sigScore.flat, sigScore.cs, variant.list.sigScore, score.col=opt$variantScoreCol, score.cutoff=opt$variantScoreThreshold)
-#} else {
-#  print("grabbing filter.cs")
-#  sorted.cells <- plotCredibleSetHeatmaps(filter.flat, filter.cs, variant.list.filter)
-#}
+} else {
+  print("grabbing filter.cs")
+  sorted.cells <- plotCredibleSetHeatmaps(filter.flat, filter.cs, variant.list.filter)
+}
 #sorted.cells <- plotCredibleSetHeatmaps(filter.flat, filter.cs, variant.list.filter, 0.01, "pp01")
 
 ##############################################################################
