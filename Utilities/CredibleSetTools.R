@@ -188,29 +188,6 @@ countCellTypeOverlaps <- function(dat, cell.type.list, variant.names=NULL, cell.
 }
 
 
-computeCellTypeEnrichmentByPermutation <- function(variant.names, label, cell.type.annot, outdir, permdir, nperm=1000, color.col='category1') {
-  ## variant.names (factor)
-  ## label (name for plotting)
-  ## cell.type.annot (data.frame with 'cell_type' column)
-  
-  permute.celltypes <- loadPermutationOverlapStats(permdir, nperm, FUN=countCellTypeOverlaps, cell.type.list=cell.type.annot$cell_type, variant.names=variant.names)
-  permute.celltypes <- permute.celltypes %>% rbind_all() %>% spread(key="permutation",value="n")
-  
-  pp10.celltypes <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.annot$CellType, variant.names=variant.names)
-  #  pp10.celltypes <- merge(cell.type.annot, pp10.celltypes, all.x=TRUE, by.x="cell_type", by.y="CellType")
-  pp10.celltypes$permute.mean <- apply(permute.celltypes[,-1], 1, mean, na.rm=T)
-  pp10.celltypes$permute.sd <- apply(permute.celltypes[,-1], 1, sd, na.rm=T)
-  pp10.celltypes$permute.max <- apply(permute.celltypes[,-1], 1, max, na.rm=T)
-  pp10.celltypes$q.permute <- with(pp10.celltypes, sapply(1:length(n), function(i) 1-ecdf(as.vector(as.matrix(permute.celltypes[i,-1])))(n[i])))
-  pp10.celltypes$enrichment <- with(pp10.celltypes, n / permute.mean)
-  pp10.celltypes$log10.p <- -with(pp10.celltypes, mapply(FUN=ppois, n, permute.mean, log.p=TRUE, lower.tail=F))/log(10)
-  pp10.celltypes$log10.p[is.infinite(pp10.celltypes$log10.p)] <- NA
-  pp10.celltypes <- pp10.celltypes %>% arrange(desc(log10.p))
-  write.tab(pp10.celltypes, file=paste0(outdir, "/Enrichment.CellType.", label,".tsv"))
-  return(to.plot)
-}
-
-
 computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type.annot, cell.group.by=NULL, score.col="PosteriorProb", min.score=0.1, bg.vars=NULL, noPromoter=FALSE) {
   ## Computes the enrichment of variants with high vs low posterior probabilities in each cell type
   ## variants.by.cells    data.frame output by getVariantByCellsTable
