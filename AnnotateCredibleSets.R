@@ -129,7 +129,6 @@ if (opt$isABC){
   predColMap <- if (!is.null(opt$predColMap)) read.delim(opt$predColMap, stringsAsFactors=F) else NULL
   overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, colMap=predColMap)
   overlap <- filterVariantOverlap(overlap, opt$cutoff, opt$cutoffTss, hk.list)  
-  overlap <- addPromoterWeightedPrediction(overlap, opt$promoterActivityRef)
 } else {
   overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant)
 }

@@ -73,27 +73,6 @@ filterVariantOverlap <- function(overlap, cutoff, tss.cutoff, hk.list) {
 }
 
 
-addPromoterWeightedPrediction <- function(overlap, promoter.activity.ref.file, accessibility.col='DHS.RPKM.TSS1Kb', remove.outliers=20) {
-  ## Use the quantile metrics for promoter activity in a given cell type to index into a reference set of promoter activities (e.g. from K562 cells)
-  ref <- read.delim(promoter.activity.ref.file)
-  promoter.activity <- sort(sqrt((0.0001+ref$`H3K27ac.RPKM.TSS1Kb`)*(0.0001+ref[,accessibility.col])), decreasing=T)
-  
-  ## Chop off top 20 promoter outliers (cutting off bottom won't change anything, because we're already cutting out about bottom ~50% of genes from the predictions)
-  promoter.activity <- promoter.activity[(remove.outliers+1):length(promoter.activity)]
-  
-  ## Rescale so max is 100
-  promoter.activity <- promoter.activity * 100 / max(promoter.activity)
-  
-  ## Index into activity
-  overlap$TargetGeneTSSActivity <- rev(promoter.activity)[round(length(promoter.activity)*overlap$TargetGenePromoterActivityQuantile)]
-  
-  ## This metric: range 0-100;  100 = enhancer is predicted to explain an absolute amount of transcription equal to most highly transcribed gene in genome
-  overlap$ABCWeightedByPromoter <- with(overlap, ABC.Score * TargetGeneTSSActivity)
-  
-  return(overlap)
-}
-
-
 annotateVariantOverlaps <- function(overlap, variant.list, all.cs, var.cols=c("CredibleSet","Disease","PosteriorProb","Coding","SpliceSite","Promoter","LocusID")) {
   cols.to.remove <- which(colnames(variant.list) %in% c("chr","position","start","end"))  
   all.flat <- overlap
