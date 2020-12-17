@@ -7,11 +7,10 @@ suppressPackageStartupMessages(library("optparse"))
 
 ## To do -- make this more customizable
 option.list <- list(
-  make_option("--params", type="character", help="Disease params file with cell type enrichment stats and others (output by CellTypeEnrichment.R"),
   make_option(c("-o", "--outdir"), type="character", help="Output directory"),
-  make_option("--cellTypes", type="character", help="Cell type annotation file", default="ABC-GWAS/data/CellTypes.Annotated.ABCPaper.txt"),
+  make_option("--cellTypes", type="character", help="Cell type annotation file", default="Test_data/CellTypes.Annotated.ABCPaper.txt"),
   make_option("--cellTypeEnrichments", type="character", default="plots/CellTypeEnrichment.tsv", help="File containing merged cell type enrichments across traits")
-  make_option("--codeDir", type="character", default="/seq/lincRNA/RAP/GWAS/200406_ABCPaper/LanderLab-EP-Prediction/"))
+  make_option("--codeDir", type="character", default="ABC-Max-pipeline/"))
 opt <- parse_args(OptionParser(option_list=option.list))
 dput(opt)
 
@@ -21,23 +20,15 @@ suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(gtools))
 suppressPackageStartupMessages(library(cowplot))
-suppressPackageStartupMessages(library(gplots))
-suppressPackageStartupMessages(library(RColorBrewer))
-suppressPackageStartupMessages(library(devtools))
 
-source(paste0(opt$codeDir, "/src/libs/JuicerUtilities.R"))
-source(paste0(opt$codeDir, "/src/libs/VariantPrediction/CredibleSetTools.R"))
+source(paste0(opt$codeDir, "/Utilities/JuicerUtilities.R"))
+source(paste0(opt$codeDir, "/Utilities/CredibleSetTools.R"))
 
 setwd(opt$outdir)
 save.image(file=paste0(opt$outdir, "/IBD.RData"))
 
 ###################################################
 ## Load in data relevant to IBD and format for plotting
-
-params <- read.delim(opt$params, stringsAsFactors=F)
-params <- subset(params, IncludeInPaper)
-
-ibddir <- subset(params, Disease == "IBD")$ABCOverlap
 
 catOrder <- c("myeloid","Bcell","Tcell","hematopoietic","fibroblast","epithelial","other")
 #catOrder <- c("myeloid","Bcell","Tcell","hematopoietic","epithelial","other")
