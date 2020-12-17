@@ -49,17 +49,11 @@ mytheme <- theme_classic() + theme(axis.text = element_text(size = 13), axis.tit
   ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(cell.type.annot.all[order(cell.type.annot.all$Categorical.IBDTissueAnnotations2),"CellType"]))
 
   formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=brewer.pal(n = 8, name = "Dark2")[-5]) + ylab("Enrichment\n(IBD variants / all variants)")
-  pdf(file=paste0(opt$outdir, "/CellTypeEnrichment.IBD.pdf"), width=15, height=4)
+  pdf(file=paste0(opt$outdir, "/CellTypeEnrichment.IBD.pdf"), width=5, height=4)
   p1 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=FM.vsGenomeEnrichment, color=CellCat)) + ggtitle("ABC Enhancers") 
   p1 <- p1 %>% formatEnrichmentBarPlot()
-  p2 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=EnhancerList.vsGenomeEnrichment, color=CellCat)) + ggtitle("Candidate Enhancers") 
-  p2 <- p2 %>% formatEnrichmentBarPlot()
-  p3 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=AllPeaks.vsGenomeEnrichment, color=CellCat)) + ggtitle("All accessible regions") 
-  p3 <- p3 %>% formatEnrichmentBarPlot()
-  p4 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=AllPeaksMinusABC.vsGenomeEnrichment, color=CellCat)) + ggtitle("Non-ABC accessible regions") 
-  p4 <- p4 %>% formatEnrichmentBarPlot()
-  print(plot_grid(p1,p4,p2, labels=c('A','B','C'), nrow=1))
-  ggsave(paste0(opt$outdir, "/CellTypeEnrichment.IBD.eps"), width=15, height=4)
+  print(p1)
+  ggsave(paste0(opt$outdir, "/CellTypeEnrichment.IBD.eps"), width=5, height=4)
   dev.off()
 }
 
