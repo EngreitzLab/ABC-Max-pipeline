@@ -36,6 +36,7 @@ dependencies:
   - coincbc=2.10.5=hcee13e7_1
   - configargparse=1.2.3=pyh9f0ad1d_0
   - cryptography=3.3.1=py36h0a59100_0
+  - csvtk=0.21.0=0
   - curl=7.71.1=he644dc0_8
   - datrie=0.8.2=py36h8c4c3a4_1
   - decorator=4.4.2=py_0
