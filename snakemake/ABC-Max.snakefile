@@ -3,7 +3,7 @@
 # This snakefile contains the rules for conducting the ABC-Max analysis as in
 # [citation].
 
-configfile: "ABC-Max.config.json"
+configfile: "ABC-Max.config1.json"
 
 from os.path import join
 
@@ -17,6 +17,16 @@ outputSet = set()
 if "ABC" in config["predictions"]:
 	outputSet.add(config["ABC"]["shrunkPredFile"][0])
 
+def getTargetFiles():
+    targets = list()
+    for r, z in zip(config["traits"], config["predictions"]):
+        targets.append(config["outDir"]+"{}/{}.txt".format(r, z))
+    return targets
+
+wildcard_constraints:
+	traits = "|".join([x for x in config["traits"]]),
+	pred = "|".join([x for x in config["predictions"]])
+
 rule all:
 	input:
 		#outputSet,
@@ -25,7 +35,8 @@ rule all:
 		expand(os.path.join(config["outDir"], "{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{trait}.bed"), trait=config["traits"]),
 		expand(os.path.join(config["outDir"], "{trait}.bedgraph"), trait=config["traits"]),
-		expand(os.path.join(config["outDir"], "{trait}.{pred}.tsv.gz"), trait=config["traits"], pred=config["predictions"])
+		expand(os.path.join(config["outDir"], "{trait}.{pred}.tsv.gz"), trait=config["traits"], pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"])
 
 # TODO: Move this to another snakefile?
 rule preprocessABC:
@@ -86,7 +97,7 @@ rule computeBackgroundOverlap:
 
 rule createVarFiles:
 	input:
-		varList = lambda wildcard: config[wildcard.trait]["varList"][0]
+		varList = lambda wildcard: config[wildcard.trait]["varList"]
 	output:
 		varBed = os.path.join(config["outDir"], "{trait}.bed"),
 		varBedgraph = os.path.join(config["outDir"], "{trait}.bedgraph"),
@@ -97,7 +108,6 @@ rule createVarFiles:
 		varFilterThreshold = lambda wildcard: config[wildcard.trait]["varFilterThreshold"][0],
 		outDir = lambda wildcard: config["outDir"],
 		chrSizes = config["chrSizes"]
-		#paramsFile = config["params"]
 	message: "Creating variant BED files"
 	run:
 		if "{params.varFilterCol}" is not None:
@@ -115,7 +125,7 @@ rule createVarFiles:
 				# Creating the bed file
 				# Finding and cutting chr, position, and variant columns
 				# TODO: do not require start and stop, only position?
-				cat {output.sigvarList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 > {output.varBed};
+				cat {output.sigvarList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 | sed -e 's/8.1e+07/81000000/g'> {output.varBed};
 
 				# Ensure that variants are sorted for bedtools -sorted overlap algorithm
 				cat {output.varBed} | bedtools sort -i stdin -faidx {params.chrSizes} | uniq > {output.varBedgraph};
@@ -135,7 +145,7 @@ rule createVarFiles:
 rule overlapVariants:
 	input:
 		predFile = lambda wildcard: config[wildcard.pred]["predFile"][0],
-		varList = lambda wildcard: config[wildcard.trait]["varList"][0],
+		varList = lambda wildcard: config[wildcard.trait]["varList"],
 		varBed = os.path.join(config["outDir"], "{trait}.bed"),
 		varBedgraph = os.path.join(config["outDir"], "{trait}.bedgraph")
 	output:
@@ -160,39 +170,45 @@ rule overlapVariants:
 
 rule annotateVariants:
 	input:
-		varList = lambda wildcard: config[wildcard.trait]["varList"][0],
+		predFile = lambda wildcard: config[wildcard.pred]["predFile"][0],
+		varList = lambda wildcard: config[wildcard.trait]["varList"],
+		csList = lambda wildcard: config[wildcard.trait]["csList"],
 		predOverlapFile = os.path.join(config["outDir"], "{trait}.{pred}.tsv.gz"),
 		bgVars = config["bgVariants"]
 	output:
-		# ...
+		touch(os.path.join(config["outDir"], "{trait}.{pred}.txt"))
+#		touch(os.path.join(config["outDir"], "/{wildcards.trait}/GenePredictions.all.tsv"))
+#		touch(os.path.join(config["outDir"], "{wildcards.trait}/enrichment/GenePredictions.all.tsv"))
 	log: os.path.join(config["logDir"], "{trait}.{pred}.annotate.log")
 	params:
 		cellTypeTable = lambda wildcard: config[wildcard.pred]["celltypeAnnotation"][0],
 		codeDir = config["codeDir"],
-		outDir = lambda wildcard: config[wildcard.trait]["outDir"][0],
+		projectDir = config["projectDir"],
+		outDir = lambda wildcard: config[wildcard.trait]["dir"],
 		scoreCol = lambda wildcard: config[wildcard.trait]["varFilterCol"][0],
 		scoreType = lambda wildcard: config[wildcard.trait]["varScoreType"][0],
 		scoreThreshold = lambda wildcard: config[wildcard.trait]["varFilterThreshold"][0],
-		ctrlThreshold = lambda wildcard: config[wildcard.trait]["varCtrlThreshold"][0]
-	message: "Annotating {wildcards.trait} variants with {wildcards.method} predictions"
+		ctrlThreshold = lambda wildcard: config[wildcard.trait]["varCtrlThreshold"][0],
+		geneLists = lambda wildcard: config[wildcard.pred]["genes"]
+	message: "Annotating {wildcards.trait} variants with {wildcards.pred} predictions"
 	run:
 		# If using ABC predictions, plotting some additional features
-		if pred=="ABC":
+		if {wildcards.pred}=={"ABC"}:
 			shell(
 				"""
-				R CMD BATCH AnnotateCredibleSets.R \
+				Rscript {params.projectDir}/AnnotateCredibleSets.R \
 				--variants {input.varList} \
 				--predictionFile {input.predOverlapFile} \
 				--outbase {params.outDir} \
 				--credibleSets {input.csList} \
 				--codeDir {params.codeDir} \
 				--cellTypeTable {params.cellTypeTable} \
-				--geneLists {params.geneLists}"
+				--genes {params.geneLists}
 				""")
 		else:
 			shell(
 				"""
-				R CMD BATCH AnnotateCredibleSets.R \
+				Rscript {params.projectDir}/AnnotateCredibleSets.R \
 				--variants {input.varList} \
 				--predictionFile {input.predOverlapFile} \
 				--isABC FALSE \
@@ -202,9 +218,9 @@ rule annotateVariants:
 				--variantScoreCol {params.scoreCol} \
 				--scoreType {params.scoreType} \
 				--variantScoreThreshold {params.scoreThreshold} \
-				--variantCtrlScoreThreshold {params.ctrlThrehold} \
+				--variantCtrlScoreThreshold {params.ctrlThreshold} \
 				--cellTypeTable {params.cellTypeTable} \
-				--geneLists {params.geneLists}"
+				--genes {params.geneLists}
 				""")
 
 
