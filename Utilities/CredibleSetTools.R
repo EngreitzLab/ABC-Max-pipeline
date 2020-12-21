@@ -73,6 +73,27 @@ filterVariantOverlap <- function(overlap, cutoff, tss.cutoff, hk.list) {
 }
 
 
+addPromoterWeightedPrediction <- function(overlap, promoter.activity.ref.file, accessibility.col='DHS.RPKM.TSS1Kb', remove.outliers=20) {
+  ## Use the quantile metrics for promoter activity in a given cell type to index into a reference set of promoter activities (e.g. from K562 cells)
+  ref <- read.delim(promoter.activity.ref.file)
+  promoter.activity <- sort(sqrt((0.0001+ref$`H3K27ac.RPKM.TSS1Kb`)*(0.0001+ref[,accessibility.col])), decreasing=T)
+  
+  ## Chop off top 20 promoter outliers (cutting off bottom won't change anything, because we're already cutting out about bottom ~50% of genes from the predictions)
+  promoter.activity <- promoter.activity[(remove.outliers+1):length(promoter.activity)]
+  
+  ## Rescale so max is 100
+  promoter.activity <- promoter.activity * 100 / max(promoter.activity)
+  
+  ## Index into activity
+  overlap$TargetGeneTSSActivity <- rev(promoter.activity)[round(length(promoter.activity)*overlap$TargetGenePromoterActivityQuantile)]
+  
+  ## This metric: range 0-100;  100 = enhancer is predicted to explain an absolute amount of transcription equal to most highly transcribed gene in genome
+  overlap$ABCWeightedByPromoter <- with(overlap, ABC.Score * TargetGeneTSSActivity)
+  
+  return(overlap)
+}
+
+
 annotateVariantOverlaps <- function(overlap, variant.list, all.cs, var.cols=c("CredibleSet","Disease","PosteriorProb","Coding","SpliceSite","Promoter","LocusID")) {
   cols.to.remove <- which(colnames(variant.list) %in% c("chr","position","start","end"))  
   all.flat <- overlap
@@ -167,6 +188,29 @@ countCellTypeOverlaps <- function(dat, cell.type.list, variant.names=NULL, cell.
 }
 
 
+computeCellTypeEnrichmentByPermutation <- function(variant.names, label, cell.type.annot, outdir, permdir, nperm=1000, color.col='category1') {
+  ## variant.names (factor)
+  ## label (name for plotting)
+  ## cell.type.annot (data.frame with 'cell_type' column)
+  
+  permute.celltypes <- loadPermutationOverlapStats(permdir, nperm, FUN=countCellTypeOverlaps, cell.type.list=cell.type.annot$cell_type, variant.names=variant.names)
+  permute.celltypes <- permute.celltypes %>% rbind_all() %>% spread(key="permutation",value="n")
+  
+  pp10.celltypes <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.annot$CellType, variant.names=variant.names)
+  #  pp10.celltypes <- merge(cell.type.annot, pp10.celltypes, all.x=TRUE, by.x="cell_type", by.y="CellType")
+  pp10.celltypes$permute.mean <- apply(permute.celltypes[,-1], 1, mean, na.rm=T)
+  pp10.celltypes$permute.sd <- apply(permute.celltypes[,-1], 1, sd, na.rm=T)
+  pp10.celltypes$permute.max <- apply(permute.celltypes[,-1], 1, max, na.rm=T)
+  pp10.celltypes$q.permute <- with(pp10.celltypes, sapply(1:length(n), function(i) 1-ecdf(as.vector(as.matrix(permute.celltypes[i,-1])))(n[i])))
+  pp10.celltypes$enrichment <- with(pp10.celltypes, n / permute.mean)
+  pp10.celltypes$log10.p <- -with(pp10.celltypes, mapply(FUN=ppois, n, permute.mean, log.p=TRUE, lower.tail=F))/log(10)
+  pp10.celltypes$log10.p[is.infinite(pp10.celltypes$log10.p)] <- NA
+  pp10.celltypes <- pp10.celltypes %>% arrange(desc(log10.p))
+  write.tab(pp10.celltypes, file=paste0(outdir, "/Enrichment.CellType.", label,".tsv"))
+  return(to.plot)
+}
+
+
 computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type.annot, cell.group.by=NULL, score.col="PosteriorProb", min.score=0.1, bg.vars=NULL, noPromoter=FALSE) {
   ## Computes the enrichment of variants with high vs low posterior probabilities in each cell type
   ## variants.by.cells    data.frame output by getVariantByCellsTable
@@ -186,7 +230,7 @@ computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type
   
   #lo.vars <- subset(variant.list, (PosteriorProb < lo.pp) & (!noPromoter | !Promoter))$variant
   # Using bg variants instead of the lo.pp threshold
-  bg.vars <- bg.vars$V4
+  bg_V4 <- bg.vars$V4
   
   stopifnot(nrow(hi.vars) > 0)
   stopifnot(nrow(bg.vars) > 0)
@@ -194,15 +238,17 @@ computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type
   message(cell.group.by)
   group.list <- if (!is.null(cell.group.by)) cell.type.annot[[cell.group.by]] else NULL
   hi.count <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.list, variant.names=hi.vars, cell.groups=group.list)
-  bg.count <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.list, variant.names=bg.vars, cell.groups=group.list)
+#  bg.count <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.list, variant.names=bg.vars, cell.groups=group.list)
+  bg_V8 <- bg.vars %>% count(V8)
   weighted.count <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.list, variant.names=variant.list$variant, cell.groups=group.list, weightByPIP=TRUE)
-  
-  hi.count$n.ctrl <- bg.count$n
+#  print(length(hi.count))
+#  print(length(bg$n))
+  hi.count$n.ctrl <- bg_V8$n
   hi.count$total <- length(hi.vars)
-  hi.count$total.ctrl <- length(bg.vars)
+  hi.count$total.ctrl <- length(bg.vars$V4)
   # What to use as prop.snps?
   hi.count$prop.snps <- with(hi.count, n/total)
-  hi.count$enrichment <- with(hi.count, n/total / ( (n.ctrl+1)/total.ctrl ))
+  hi.count$enrichment <- with(hi.count, n/total / ( (n.ctrl)/total.ctrl ))
   hi.count$log10.p <- -with(hi.count, mapply(FUN=phyper, n, total, total.ctrl, n+n.ctrl, log.p=TRUE, lower.tail=F))/log(10)
   hi.count$log10.p[is.infinite(hi.count$log10.p)] <- NA
   hi.count$p <- with(hi.count, mapply(FUN=phyper, n, total, total.ctrl, n+n.ctrl, log.p=FALSE, lower.tail=F))
@@ -485,7 +531,7 @@ plotOverlapByPosteriorProb <- function(variant.list, flat, posterior.prob.breaks
     geom_bar(stat="identity", position = "dodge") + 
     scale_fill_brewer(palette = "OrRd") + theme_bw() + ggtitle(cat.col)
   print(g)
-  
+  write.tab(freq, "OverlapGroupedByPosteriorProb.tsv")  
   g <- ggplot(freq, aes(factor(Category), Enrichment, fill = PosteriorProb)) + 
     geom_bar(stat="identity", position = "dodge") + 
     scale_fill_brewer(palette = "OrRd") + theme_bw() + ggtitle(cat.col)
@@ -854,6 +900,116 @@ compareABCPredictionsToGeneLists <- function(gene.pred.table, cell.bins=c(), pre
 }
 
 
+getGeneCellTypePairAnalysis <- function(flat, gene.pred.table, pred.col, top.ranks, cell.type.annot, unique.cell.col="Categorical.CellTypeMerged") {
+  ## Compare the number of predicted gene/cell type pairs
+  pc <- pred.col
+  cs.to.include <- unique(subset(gene.pred.table, !is.na(get(pc)))$CredibleSet)
+  
+  gp <- subset(gene.pred.table, CredibleSet %in% cs.to.include & as.character(as.matrix(get(pred.col))) %in% top.ranks)
+  flat <- merge(flat, gp[,c("CredibleSet","TargetGene")], by=c("CredibleSet","TargetGene"))
+  flat <- merge(flat, cell.type.annot[,c("CellType",unique.cell.col)], by="CellType")
+  flat <- unique(flat[,c("CredibleSet","TargetGene",unique.cell.col)])
+  combos <- do.call(rbind, by(flat, flat$CredibleSet, function(f) with(f, data.frame(
+    nGenes=length(unique(TargetGene)),
+    csGenes=with(gene.pred.table, sum(CredibleSet == as.character(as.matrix(f$CredibleSet[1])))),
+    nCellTypes=length(unique(get(unique.cell.col))),
+    totalCellTypes=length(unique(cell.type.annot[,unique.cell.col])),
+    nCombos=nrow(f))), simplify=FALSE))
+  combos$totalCombos <- with(combos, csGenes * totalCellTypes)
+  combos$fractionCombos <- with(combos, nCombos / totalCombos)
+  
+  stats <- with(combos, list(
+    `Possible combinations of cell types and genes`=sum(totalCombos),
+    `Prioritized combinations of cell types and genes`=sum(nCombos),
+    `Fold-reduction in search space for gene-cell type combinations`=1 / (sum(nCombos)/sum(totalCombos))
+  ))
+  return(stats)
+}
+
+
+###################################################################
+## Analysis of cell-type specificity of predictions
+# Using score.col and min.score instead of pp
+# If a score is not provided, using all variants
+getCellTypeSpecificityStats <- function(flat, best.genes, gex, score.col=NULL, min.score=NULL) {
+  
+  # If no score threshold is provided, using all variants
+  if (!is.null(score.col) & !is.null(min.score)){
+    cts <- as.data.frame(subset(flat, get(score.col) >= min.score & TargetGene %in% best.genes) %>% group_by(QueryRegionName,TargetGene) %>% tally())
+    ctsExpressedMid <- as.data.frame(subset(flat, get(score.col) >= min.score  & TargetGene %in% best.genes & TargetGenePromoterActivityQuantile >= 0.7) %>% group_by(QueryRegionName,TargetGene) %>% tally())
+  } else {
+    cts <- as.data.frame(subset(flat, TargetGene %in% best.genes) %>% group_by(QueryRegionName,TargetGene) %>% tally())
+    ctsExpressedMid <- as.data.frame(subset(flat, TargetGene %in% best.genes & TargetGenePromoterActivityQuantile >= 0.7) %>% group_by(QueryRegionName,TargetGene) %>% tally())
+  }
+  cts <- merge(cts, ctsExpressedMid, by=c("QueryRegionName","TargetGene"), all.x=T)
+  colnames(cts)[colnames(cts) == "n.x"] <- "nPredWhenExpressed"
+  colnames(cts)[colnames(cts) == "n.y"] <- "nPredWhenExpressedMid"
+  cts$nPredWhenExpressedMid[is.na(cts$nPredWhenExpressedMid)] <- 0
+  cts$nGeneExpressed <- sapply(as.character(as.matrix(cts$TargetGene)), function(gene) sum(subset(gex, name == gene)[,-1] >= opt$gexQuantileCutoff))
+  cts$nGeneExpressedMid <- sapply(as.character(as.matrix(cts$TargetGene)), function(gene) sum(subset(gex, name == gene)[,-1] >= 0.7))  ## 0.7 corresponds to about half of 'expressed' genes in a cell type
+  
+  res <- list(
+    `Total cell types`=ncol(gex)-1,
+    `Total variant-gene links considered for cell type specificity analysis`=nrow(cts),
+    `Average number of cell types per variant-gene link`=mean(cts$nPredWhenExpressed),
+    `Median number of cell types per variant-gene link`=median(cts$nPredWhenExpressed),
+    `Average number of cell types per variant-gene link (mid+ expression only)`=mean(cts$nPredWhenExpressedMid),
+    `Median number of cell types per variant-gene link (mid+ expression only)`=median(cts$nPredWhenExpressedMid),
+    `Average number of cell types where gene is expressed`=mean(cts$nGeneExpressed),
+    `Median number of cell types where gene is expressed`=median(cts$nGeneExpressed),
+    `Average number of cell types where gene is expressed (mid+ expression only)`=mean(cts$nGeneExpressedMid),
+    `Median number of cell types where gene is expressed (mid+ expression only)`=median(cts$nGeneExpressedMid))
+  
+  return(list(tab=cts, stats=res))
+}
+
+
+
+###################################################################
+## Code for variant histograms
+
+plotVariantHistograms <- function(flat, variant.list, cs, score.col, min.score, cell.group=NULL) {
+  flat <- subset(flat, get(score.col) >= min.score)
+  variant.list <- subset(variant.list, get(score.col) >= min.score)
+  
+  ## Redo the factor so that count table only includes these variants
+  variant.list$variant <- factor(as.character(as.matrix(variant.list$variant)))
+  flat$QueryRegionName <- refactor(flat$QueryRegionName, variant.list$variant)
+  stopifnot(all(!is.na(flat$QueryRegionName)))
+  
+  if (is.null(cell.group)) {
+    variant.by.cells <- getVariantByCellsTable(flat)
+    genes.by.cells <- getGenesByCellsTable(flat)
+  } else {
+    flat <- merge(flat, cell.type.annot, by="CellType")
+    variant.by.cells <- flat %>% group_by_(.dots=c("QueryRegionName",cell.group)) %>% summarise( n.genes=n() )
+    genes.by.cells <- flat %>% group_by_(.dots=c("TargetGene", cell.group)) %>% summarise( n.vars=n() )
+  }
+  cells.per.variant <- table(variant.by.cells$QueryRegionName)
+  
+  variant.by.genes <- getVariantByGenesTable(flat)
+  genes.per.variant <- table(variant.by.genes$QueryRegionName)
+  
+  main <- paste0("Grouping: ", cell.group)
+  hist(cells.per.variant, border=NA, breaks=50, col='gray', xlab="# Cell Types/Groups per Variant", main=main)
+  hist(cells.per.variant[cells.per.variant != 0], border=NA, breaks=50, col='gray', xlab="# Cell Types/Groups per Variant (no zeroes)", main=main)
+  hist(genes.per.variant, border=NA, breaks=50, col='gray', xlab="# Genes per Variant", main=main)
+  hist(genes.per.variant[genes.per.variant != 0], border=NA, breaks=50, col='gray', xlab="# Genes per Variant (no zeroes)", main=main)
+  hist(table(as.character(as.matrix(genes.by.cells$TargetGene))), border=NA, breaks=50, col='gray', xlab="# Cell Types/Groups per Gene", main=main)
+  
+  n.cells <- if (is.null(cell.group)) length(levels(flat$CellType)) else length(levels(flat[,cell.group]))
+  prefix <- paste0("[Min. score: ", min.score, "; Cell Grouping: ", cell.group, "] ")
+  cell.suffix <- paste0(" (of ", n.cells, ")")
+  stats <- list()
+  stats[[paste0(prefix, "Median cell types/groups per variant, given variant is active in at least 1 cell type")]] <- paste0(median(cells.per.variant[cells.per.variant != 0]), cell.suffix)
+  stats[[paste0(prefix, "Mean cell types/groups per variant, given variant is active in at least 1 cell type")]] <- paste0(mean(cells.per.variant[cells.per.variant != 0]), cell.suffix)
+  stats[[paste0(prefix, "Median genes per variant, given variant is active in at least 1 cell type")]] <- median(genes.per.variant[genes.per.variant != 0])
+  stats[[paste0(prefix, "Mean genes per variant, given variant is active in at least 1 cell type")]] <- mean(genes.per.variant[genes.per.variant != 0])
+  stats[[paste0(prefix, "Fraction variants that regulate more than 1 gene, given variant regulates at least 1 gene")]] <- sum(genes.per.variant[genes.per.variant != 0] > 1) / sum(genes.per.variant != 0)
+  return(stats)
+}
+
+
 ###################################################################
 ## Properties of enhancers
 
@@ -983,18 +1139,20 @@ plotGeneRankEnrichment <- function(gp, cell.type.annot, cell.bins, xlim=c(1,10))
   
   ## loop over cell type annots and cell.bins and rank columns
   suppressPackageStartupMessages(library(ggplot2))
-  
+  print("Here") 
   #rank.cols <- colnames(gp)[greplany(c("ConnectionStrengthRank.","CellTypeCount.","MaxABC."), colnames(gp))]
   rank.cols <- colnames(gp)[greplany(c("ConnectionStrengthRank","DistanceRank"), colnames(gp))]
   cat.cols <- colnames(gp)[grepl("GeneList.", colnames(gp)) & !grepl("Smillie", colnames(gp))]
   pred.cols <- colnames(gp)[grepl("GeneList.Prediction.", colnames(gp))]
-  
+  print(rank.cols)
+  print(pred.cols)
+  print(cat.cols) 
   #moved to getGenePrioritizationTable
   #gp <- gp %>% group_by(CredibleSet, add=FALSE) %>% mutate(DistanceRank=rank(PromoterDistanceToBestSNP)) %>% as.data.frame() 
   
   int_breaks <- function(x, n = 3) pretty(x, n)[pretty(x, n) %% 1 == 0]
   #pr <- data.frame()
-  
+  print(cat.cols) 
   for (cat.col in cat.cols) {
     ## Get credible sets with at least one "true" nearby
     #csWithCategory <- unique(subset(gp, get(cat.col))$CredibleSet)
@@ -1004,10 +1162,11 @@ plotGeneRankEnrichment <- function(gp, cell.type.annot, cell.bins, xlim=c(1,10))
     
     distanceRank.allcs <- getGeneRankEnrichment(gp, "DistanceRank", cat.col, cs.list=csWithCategory, Method="Distance")
     distanceGeneBody.allcs <- getGeneRankEnrichment(gp, "DistanceToGeneBodyRank", cat.col, cs.list=csWithCategory, Method="DistanceToGeneBody")
-    
+    print(length(pred.cols)) 
     ## Plot performance of other provided predictors
     if (length(pred.cols)>0) {
       pred <- do.call(rbind, lapply(pred.cols, function(col) getGenePredictionStats(gp, col, cat.col, csWithCategory)))
+      write.tab(pred, "PrecisionRecallTable.tsv")
       r <- ggplot(pred, aes(x=Recall, y=Precision, color=PredictionMethod)) + geom_point(size=3)
       r <- r + xlim(0,1) + ylim(0,1)
       r <- r + theme_classic()
@@ -1262,3 +1421,907 @@ getPrecisionRecall <- function(pred, labels, weights=NULL, ...) {
   return(result)
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#################################################################
+################################################################# 
+## OLD
+#################################################################
+#################################################################
+
+
+if (FALSE) {
+  annotateVariants <- function(df, variant.gr, promoters.gr) {
+    library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+    library(VariantAnnotation)
+    txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene
+    
+    library(org.Hs.eg.db)
+    
+    codingVariants <- locateVariants(variant.gr, txdb, CodingVariants())
+    #symbols <- select(org.Hs.eg.db, keys=unique(na.omit(codingVariants$GENEID)), keytype="ENTREZID",
+    #                 columns="SYMBOL")
+    #df$Coding <- NA
+    #df$Coding[codingVariants$QUERYID] <- sapply(codingVariants$GENEID, function(id) {
+    #  index <- which(symbols$ENTREZID == id)
+    #  if (length(index) == 1) return(symbols$SYMBOL[index])
+    #  else return(NA)
+    #})
+    
+    df$Coding <- 1:nrow(df) %in% codingVariants$QUERYID  ## Note that this only means it overlaps CDS, not that it's missense
+    
+    spliceVariants <- locateVariants(variant.gr, txdb, SpliceSiteVariants())
+    #symbols <- select(org.Hs.eg.db, keys=unique(na.omit(spliceVariants$GENEID)), keytype="ENTREZID",
+    #                 columns="SYMBOL")
+    #df$SpliceSite <- NA
+    #df$SpliceSite[spliceVariants$QUERYID] <- sapply(spliceVariants$GENEID, function(id) {
+    #  index <- which(symbols$ENTREZID == id)
+    #  if (length(index) == 1) return(symbols$SYMBOL[index])
+    #  else return(NA)
+    #})
+    
+    df$SpliceSite <- 1:nrow(df) %in% spliceVariants$QUERYID
+    ixn <- findOverlaps(variant.gr, promoters.gr)
+    df$Promoter <- 1:nrow(df) %in% queryHits(ixn)
+    return(df)
+  }
+  
+  annotateVariantsWithPartition <- function(variant.list, partition.file="/seq/lincRNA/RAP/GWAS/170704_Partitioning/170819-All/PartitionCombined.bed", tmp.file=".tmp.partition", sizes="/seq/lincRNA/data/hg19/sizes") {
+    writeBed(with(variant.list, data.frame(chr=chr, start=position-1, end=position+1)), file=tmp.file)
+    system(paste0("source /broad/software/scripts/useuse; use BEDTools; bedtools intersect -wa -b ", tmp.file, " -a ", partition.file, " > ", tmp.file, ".overlap"))
+    partition <- unique(readBed(paste0(tmp.file,".overlap")))
+    system(paste0("rm ",tmp.file, " ", tmp.file, ".overlap"))
+    return(annotateVariantsWithPartitionHelper(variant.list, partition))
+  }
+  
+  annotateVariantsWithPartitionHelper <- function(variant.list, annotation.partition) {
+    ixn <- findOverlaps(GRangesFromBed(with(variant.list, data.frame(chr=chr, start=position-1, end=position))), GRangesFromBed(annotation.partition))
+    stopifnot(length(ixn) == nrow(variant.list))
+    stopifnot(!any(duplicated(queryHits(ixn))))
+    variant.list$Partition <- annotation.partition$name[subjectHits(ixn)]
+    return(variant.list)
+  }
+  
+  getPermutedVariantsWithPartition <- function(n.perm, variant.list, annotation.partition, dir="permutations/") {
+    do.call(rbind, lapply(1:n.perm, function(i) {
+      p <- readBed(paste0(dir,"/",i,"/permuted.variants.bed"))
+      p <- merge(p, variant.list[,c("variant","PosteriorProb")], by.x='name', by.y='variant')
+      p$position <- p$start
+      p <- annotateVariantsWithPartition(p, annotation.partition)
+      p
+    }))
+  }
+  
+  
+  collectGeneExpression <- function(neighborhood.dir, cell.types, col="pA.RNA.RPKM") {
+    result <- lapply(cell.types, function(ct) {
+      file <- paste0(neighborhood.dir,"/",ct,"/GeneList.txt")
+      print(file)
+      if (file.exists(file)) {
+        g <- read.delim(file)
+        expr <- g[,col]
+        names(expr) <- g[,"name"]
+        return(expr)
+      } else {
+        return(NA)
+      }
+    })
+    num.genes <- max(as.numeric(names(table(unlist(lapply(result, length))))))
+    for (i in 1:length(result)) 
+      if (length(result[[i]]) == 1)
+        result[[i]] <- rep(NA, num.genes)
+    result <- do.call(cbind, result)
+    colnames(result) <- cell.types
+    return(result)
+  }
+  
+  
+  makeCredibleSets <- function(df, genes, Source=NA) {
+    if ("Partition" %in% colnames(df)) {
+      res <- do.call(rbind, tapply(1:nrow(df), df$CredibleSet, function(i) {
+        with(df[i,], data.frame(chr=as.character(as.matrix(chr[1])), start=min(position), end=max(position),CredibleSet=CredibleSet[1], nSNP=length(position), AnyCoding=any(Partition == "CDS"), AnyPromoter=any(Partition == "TSS-100bp"), AnySpliceSite=any(Partition == "SpliceSite"), Disease=Disease[1], Source=Source, BestSNP=variant[which.max(PosteriorProb)[1]]))   
+      }))
+    } else {
+      res <- do.call(rbind, tapply(1:nrow(df), df$CredibleSet, function(i) {
+        with(df[i,], data.frame(chr=as.character(as.matrix(chr[1])), start=min(position), end=max(position),CredibleSet=CredibleSet[1], nSNP=length(position), AnyCoding=any(Coding), AnyPromoter=any(Promoter), AnySpliceSite=any(SpliceSite), Disease=Disease[1], Source=Source, LocusID=LocusID[1], BestSNP=variant[which.max(PosteriorProb)[1]]))   
+      }))
+    }
+    res <- merge(res, unique(data.frame(BestSNP=df$variant, BestSNPPos=df$position)), all.x=TRUE)
+    res <- res[,c(2:ncol(res),1)]
+    
+    coding.genes <- subset(genes, !grepl("NR_", name))
+    ixn <- as.data.frame(nearest(GRangesFromBed(with(res, data.frame(chr=chr, start=BestSNPPos, end=BestSNPPos))),
+                                 GRangesFromBed(coding.genes), select="all", ignore.strand=TRUE))
+    res$BestSNPNearestGene <- sapply(1:nrow(res), function(i) paste(unique(coding.genes$symbol[subset(ixn, queryHits == i)$subjectHits]), collapse=","))
+    return(res)
+  }
+  
+  
+  writeCredibleSetBed <- function(all.cs, variant.list, file) {
+    ## Write credible set for viewing ... with variants as "exons"
+    bed <- NULL
+    for (i in 1:nrow(all.cs)) {
+      nSNP <- all.cs$nSNP[i]
+      dz <- all.cs$Disease[i]
+      cs <- all.cs$CredibleSet[i]
+      variants <- subset(variant.list, CredibleSet == cs)
+      variants <- variants[order(variants$position),]
+      bed.entry <- with(variants, data.frame(
+        chr=chr[1], start=min(position)-1, end=max(position), name=paste(dz,cs,sep="_"),
+        score=nSNP, strand=".", thickStart=min(position)-1, thickEnd=max(position), itemRgb="0,0,0", 
+        blockCount=nSNP, blockSizes=paste0(rep("1,",nSNP), collapse=""), 
+        blockStarts=paste0(sort(position)-all.cs$start[i],collapse=",")))
+      if (nrow(bed.entry) != 1) browser()
+      if (is.null(bed)) bed <- unfactor(bed.entry)
+      else bed <- rbind(bed, bed.entry)
+    }
+    writeBed(bed, file)
+    return(bed)
+  }
+  
+  writeVariantBed <- function(variant.list, file, name.only=FALSE) {
+    if (name.only) 
+      tmp <- with(variant.list, data.frame(chr=chr, start=position-1, end=position, name=variant))
+    else
+      tmp <- with(variant.list, data.frame(chr=chr, start=position-1, end=position, name=paste0(variant,"-",Disease), score=PosteriorProb, strand="+"))
+    tmp <- tmp[order(tmp$chr, tmp$start),]
+    writeBed(format(tmp, scientific=F), file)
+    return(tmp)
+  }
+  
+  
+  plotCredibleSetProperties <- function(all.cs, filter.cs=NULL) {
+    hist(table(all.cs$LocusID), col='gray', xlab="Number of Diseases per Locus", ylab="Count", main="All Credible Sets: locus = within 500Kb")
+    hist(all.cs$nSNP, col='gray', breaks=100, xlim=c(0,50), xlab="Number of SNPs in Credible Set", main="All Credible Sets")
+    hist(subset(all.cs, !AnyCoding & !AnySpliceSite)$nSNP, col='gray', breaks=100, xlim=c(0,50), xlab="Number of SNPs in Credible Set", main="Credible Sets w/o Coding or Splice Site Variants")
+    plotCumulativeDistribution(subset(all.cs, AnyCoding | AnySpliceSite)$nSNP, 
+                               subset(all.cs, !AnyCoding & !AnySpliceSite)$nSNP, "Coding or Splice Site", "Neither",
+                               xlim=c(0,50), ylab="Cumulative fraction", xlab="# SNPs in Credible Set")
+    plotCumulativeDistribution(subset(all.cs, Source == "Farh2015" & !AnyCoding & !AnySpliceSite)$nSNP, 
+                               subset(all.cs, Source != "Farh2015" & !AnyCoding & !AnySpliceSite)$nSNP, "Farh2015", "Other",
+                               xlim=c(0,50), ylab="Cumulative fraction", xlab="# SNPs in Credible Set", main="Credible Sets w/o Coding or Splice site variants")
+    plot(ecdf(subset(all.cs, !AnyCoding & !AnySpliceSite)$nSNP), xlim=c(0,50), ylab="Cumulative frequency", xlab="# SNPs in Credible Set")
+    
+    if (!is.null(filter.cs)) {
+      hist(filter.cs$nSNP, col='gray', breaks=100, xlim=c(0,50), xlab="Number of SNPs in Credible Set", main="Filtered Credible Sets")
+      plotCumulativeDistribution(subset(filter.cs, Source == "Farh2015")$nSNP, 
+                                 subset(filter.cs, Source != "Farh2015")$nSNP, "Farh2015", "Other",
+                                 xlim=c(0,50), ylab="Cumulative fraction", xlab="# SNPs in Credible Set", main="Filtered Credible Sets w/o Coding or ss variants")
+      plot(ecdf(filter.cs$nSNP), xlim=c(0,50), ylab="Cumulative frequency", xlab="# SNPs in Credible Set", main="Filtered Credible Sets")
+    }
+  }
+  
+  
+  getBestSNP <- function(df) {
+    tmp <- unlist(by(df, df$CredibleSet, function(x) as.character(as.matrix(x$variant[which.max(x$pvalue)])), simplify=TRUE))
+    tmp[as.character(as.matrix(df$CredibleSet))]    
+  }
+  
+  getCredibleSetLoci <- function(all.cs, buffer=500000, overlap.sets=NULL) {
+    ## e.g. overlap.sets = list(c("Crohns_disease","IBD","Ulcerative_colitis"))
+    ## Find those with associations with more than one disease
+    
+    all.cs.gr <- GRangesFromBed(all.cs[,c("chr","start","end")])
+    ixn <- findOverlaps(all.cs.gr, all.cs.gr, maxgap=500000)
+    to.keep <- unique(unlist(mapply(function(i,j) {
+      di <- all.cs$Disease[i]
+      dj <- all.cs$Disease[j]
+      
+      if ( (i != j) & (di != dj) & !any(unlist(lapply(overlap.sets, function(overlap.set) all(c(di,dj) %in% overlap.set)))) )
+        return(c(i,j))
+    }, queryHits(ixn), subjectHits(ixn))))
+    
+    loci <- reduce(all.cs.gr, min.gapwidth=500000, drop.empty.ranges=TRUE, ignore.strand=TRUE) 
+    return(loci)
+  }
+  
+  assignLocusId <- function(all.cs, loci) {
+    ixn <- findOverlaps(GRangesFromBed(all.cs[,c("chr","start","end")]), loci)
+    all.cs$LocusID <- subjectHits(ixn)
+    return(all.cs)
+  }
+  
+  
+  
+  filterPredictions <- function(pred.flat, filter.cs, tss.cutoff=0.1, require.gex=FALSE) {
+    ## Implements a different cutoff for distal enhancers versus distal promoters
+    all.flat <- subset(pred.flat, ( (!is.na(GeneExpression) | !require.gex) & ABC.Score >= opt$cutoffLenient & ((class != "tss" & class != "promoter") | isOwnTSS)) | (Score.Fraction >= tss.cutoff & (class == "tss" | class == "promoter")))
+    filter.flat <- subset(all.flat, CredibleSet %in% as.character(as.matrix(filter.cs$CredibleSet)))
+    return(list(all=all.flat, filter=filter.flat))
+  }
+  
+  
+  getPredictionsForVariant <- function(variant, pred) {
+    do.call(rbind, lapply(pred, function(cell.pred) {
+      curr <- subset(cell.pred, QueryRegionName == variant)
+      if (nrow(curr) > 0)
+        curr[,common.col]
+    }))
+  }
+  
+  annotateCredibleSet <- function(name, variants, pred, fraction.cutoff=opt$cutoff, abs.cutoff=opt$absCutoff) {
+    variant.overlaps <- do.call(rbind, lapply(as.character(as.matrix(variants)), function(variant) getPredictionsForVariant(variant, pred)))
+    if (!is.null(variant.overlaps)) { 
+      variant.overlaps$CredibleSet <- name
+      result <- subset(variant.overlaps, (ABC.Score >= fraction.cutoff) | (Score >= abs.cutoff))
+      if (nrow(result) == 0) return(NULL)
+      return(result)
+    } 
+    return(NULL)
+  }
+  
+  
+  annotateCredibleSets <- function(variants, cs, pred) {
+    names <- as.character(as.matrix(cs$CredibleSet))
+    cs.annot <- lapply(names, function(cs.name) {
+      print(subset(variants, CredibleSet == cs.name)$variant)
+      annotateCredibleSet(cs.name, subset(variants, CredibleSet == cs.name)$variant, pred)
+    })
+    names(cs.annot) <- names
+    cs.annot <- cs.annot[!unlist(lapply(cs.annot, function(curr) is.null(curr) | nrow(curr) == 0))]
+    return(cs.annot)
+  }
+  
+  
+  annotateCredibleSetFlat <- function(variants, cs, pred) {
+    names <- as.character(as.matrix(cs$CredibleSet))
+    cs.annot <- lapply(names, function(cs.name) {
+      print(subset(variants, CredibleSet == cs.name)$variant)
+      annotateCredibleSet(cs.name, subset(variants, CredibleSet == cs.name)$variant, pred)
+    })
+    names(cs.annot) <- names
+    cs.annot <- cs.annot[!unlist(lapply(cs.annot, function(curr) is.null(curr) | nrow(curr) == 0))]
+    return(cs.annot)
+  }
+  
+  
+  
+  getCredibleSetVariants <- function(cs, fraction.cutoff=NULL, abs.cutoff=NULL) {
+    cs$QueryRegionName <- as.character(as.matrix(cs$QueryRegionName))
+    if (length(cs) > 0) {
+      if (!is.null(fraction.cutoff)) cs <- subset(cs, ABC.Score >= fraction.cutoff)
+      if (!is.null(abs.cutoff)) cs <- subset(cs, Score >= abs.cutoff)
+    }
+    if (length(cs) > 0) table(cs[,c("QueryRegionName","CellType")])
+  }
+  
+  getCredibleSetGenes <- function(cs, fraction.cutoff=NULL, abs.cutoff=NULL) {
+    ## Number of enhancers regulating each gene
+    if (length(cs) > 0) {
+      if (!is.null(fraction.cutoff)) cs <- subset(cs, ABC.Score >= fraction.cutoff)
+      if (!is.null(abs.cutoff)) cs <- subset(cs, Score >= abs.cutoff)
+    }
+    if (length(cs) > 0) with(cs[!duplicated(cs[,c("TargetGene","name","CellType")]),], table(as.matrix(TargetGene), CellType))
+  }
+  
+  getCredibleSetElements <- function(cs, fraction.cutoff=NULL, abs.cutoff=NULL) {
+    ## Tally of affected elements per cell type
+    if (length(cs) > 0) {
+      if (!is.null(fraction.cutoff)) cs <- subset(cs, ABC.Score >= fraction.cutoff)
+      if (!is.null(abs.cutoff)) cs <- subset(cs, Score >= abs.cutoff)
+    }
+    if (length(cs) > 0) with(cs[!duplicated(cs[,c("name","CellType")]),], table(as.matrix(name), CellType))
+  }
+  
+  getCredibleSetElementsPerCellType <- function(cs, fraction.cutoff=NULL, abs.cutoff=NULL) {
+    ## Number of affected elements per cell type
+    if (length(cs) > 0) {
+      if (!is.null(fraction.cutoff)) cs <- subset(cs, ABC.Score >= fraction.cutoff)
+      if (!is.null(abs.cutoff)) cs <- subset(cs, Score >= abs.cutoff)
+    }
+    if (length(cs) > 0) apply(getCredibleSetElements(cs), 2, sum)
+  }
+  
+  getCredibleSetCellTypes <- function(cs, fraction.cutoff=NULL, abs.cutoff=NULL) {
+    #if (length(cs) > 0) 
+    if (length(cs) > 0) {
+      if (!is.null(fraction.cutoff)) cs <- subset(cs, ABC.Score >= fraction.cutoff)
+      if (!is.null(abs.cutoff)) cs <- subset(cs, Score >= abs.cutoff)
+    }
+    if (length(cs) > 0) unique(cs$CellType)
+  }
+  
+  
+  addUniqueCountsPerCS <- function(all.flat, all.cs, col) {
+    count.col <- paste0('n',col,'s')
+    cells.per.cs <- with(all.flat, tapply(get(col), CredibleSet, function(z) length(unique(z))))
+    tmp <- data.frame(CredibleSet = factor(names(cells.per.cs), levels=levels(all.cs$CredibleSet)))
+    tmp[,count.col] <- cells.per.cs
+    all.cs <- merge(all.cs, tmp, all.x=T)
+    all.cs[,count.col][is.na(all.cs[,count.col])] <- 0
+    return(all.cs)  
+  }
+  
+  getUniqueCountsFromOverlap <- function(all.flat, ids, count.feature, by.feature) {
+    ids <- as.character(as.matrix(ids))
+    count.per.ct <- with(all.flat, tapply(get(count.feature), get(by.feature), function(z) length(unique(z))))
+    result <- rep(0, length(ids))
+    names(result) <- ids
+    for (id in ids)
+      if (id %in% names(count.per.ct))
+        result[names(result) == id] <- count.per.ct[id]
+    result[is.na(result)] <- 0
+    return(result)
+  }
+  
+  getCredibleSetCounts <- function(cs.plot, all.flat, control.types) {
+    ## Number of cell types per association, variant or locus
+    cs.plot$hasExpressedPromoterVariant <- cs.plot$CredibleSet %in% unique(subset(all.flat, isOwnTSS)$CredibleSet)
+    cs.plot$nCellTypes <- getUniqueCountsFromOverlap(all.flat, cs.plot$CredibleSet, "CellType", "CredibleSet")
+    cs.plot$nControlCellTypes <- getUniqueCountsFromOverlap(subset(all.flat, CellType %in% control.types), cs.plot$CredibleSet, "CellType", "CredibleSet")
+    cs.plot$nImmuneCellTypes <- getUniqueCountsFromOverlap(subset(all.flat, !(CellType %in% control.types)), cs.plot$CredibleSet, "CellType", "CredibleSet")
+    cs.plot$nTargetGenes <- getUniqueCountsFromOverlap(all.flat, cs.plot$CredibleSet, "TargetGene", "CredibleSet")
+    return(cs.plot)
+  }
+  
+  getVariantCounts <- function(all.flat, variants, control.types) {
+    variants$nCellTypes <- getUniqueCountsFromOverlap(all.flat, variants$variant, "CellType", "QueryRegionName")
+    variants$nControlCellTypes <- getUniqueCountsFromOverlap(subset(all.flat, CellType %in% control.types), variants$variant, "CellType", "QueryRegionName")
+    variants$nImmuneCellTypes <- getUniqueCountsFromOverlap(subset(all.flat, !(CellType %in% control.types)), variants$variant, "CellType", "QueryRegionName")
+    variants$nTargetGenes <- getUniqueCountsFromOverlap(all.flat, variants$variant, "TargetGene", "QueryRegionName")
+    return(variants)
+  }
+  
+  getCellTypeCounts <- function(all.cell.types, all.flat, control.types, variants, cs.plot) {
+    cell.types <- data.frame(CellType=all.cell.types, IsControl=all.cell.types %in% control.types)
+    cell.types$nCredibleSets <- getUniqueCountsFromOverlap(all.flat, cell.types$CellType, "CredibleSet", "CellType")
+    ## do it in subset where we only look at variants that don't overlap many cell types
+    cell.types$nCredibleSetsMinusUbiq <- getUniqueCountsFromOverlap(subset(all.flat, QueryRegionName %in% subset(variants, nCellTypes <= 17)$variant), cell.types$CellType, "CredibleSet", "CellType")
+    cell.types$nCredibleSetsMinusControl <- getUniqueCountsFromOverlap(subset(all.flat, QueryRegionName %in% subset(variants, nControlCellTypes == 0)$variant), cell.types$CellType, "CredibleSet", "CellType")
+    cell.types$nCredibleSetsMinusK562 <- getUniqueCountsFromOverlap(subset(all.flat, CellType != "K562"), cell.types$CellType, "CredibleSet", "CellType")
+    cell.types$nSmallCredibleSets <- getUniqueCountsFromOverlap(subset(all.flat, CredibleSet %in% subset(cs.plot, nSNP <= 10)$CredibleSet), cell.types$CellType, "CredibleSet", "CellType")
+    cell.types <- cell.types[order(cell.types$IsControl),]
+    return(cell.types)
+  }
+  
+  
+  plotCellTypeCounts <- function(cell.types, ...) {
+    par(mar=c(5,20,5,3))
+    p <- cell.types$nCredibleSets; names(p) <- cell.types$CellType
+    colors <- c('red','gray')[as.numeric(cell.types$IsControl[order(p)])+1]
+    p <- p[order(p)]
+    par(mar=c(5.1,6.1,4.1,2.1))
+    b <- barplot(p, horiz=TRUE, yaxt='n', col=colors, xlab="# Credible Sets", ...)
+    axis(2, b, labels=names(p), cex=0.5, las=2)
+    
+    par(mar=c(5,10,5,3))
+    p <- cell.types$nCredibleSetsMinusUbiq; names(p) <- cell.types$CellType
+    colors <- c('red','gray')[as.numeric(cell.types$IsControl[order(p)])+1]
+    p <- p[order(p)]
+    par(mar=c(5.1,6.1,4.1,2.1))
+    b <- barplot(p, horiz=TRUE, yaxt='n', col=colors, xlab="# Credible Sets (-ubiq variants)", ...)
+    axis(2, b, labels=names(p), cex=0.5, las=2)
+    
+    par(mar=c(5,10,5,3))
+    p <- cell.types$nSmallCredibleSets; names(p) <- cell.types$CellType
+    colors <- c('red','gray')[as.numeric(cell.types$IsControl[order(p)])+1]
+    p <- p[order(p)]
+    par(mar=c(5.1,6.1,4.1,2.1))
+    b <- barplot(p, horiz=TRUE, yaxt='n', col=colors, xlab="# Credible sets (<=10 variants)", ...)
+    axis(2, b, labels=names(p), cex=0.5, las=2)
+  }
+  
+  
+  plotEnhancerOverlapStats <- function(cs.plot, cell.types, variants, all.flat, ...) {
+    ## Show CDF for cell types per association, versus permuted, broken down by immune cell types vs control cell types
+    b <- barplot(getSummaryCSCellTypeCounts(cs.plot), main="# Credible Sets with EP Predictions\nin cell type category", xlab="All CS", horiz=TRUE, yaxt='n')
+    axis(2, b, labels=c("All","Immune","Control","Both","ControlOnly"), las=2, cex=0.7)
+    b <- barplot(getSummaryCSCellTypeCounts(subset(cs.plot, nSNP <= 10)), main="# Credible Sets with EP Predictions\nin cell type category", xlab="CS with <= 10 variants", horiz=TRUE, yaxt='n')
+    axis(2, b, labels=c("All","Immune","Control","Both","ControlOnly"), las=2, cex=0.7)
+    
+    ## Number of cell types per association, variant or locus
+    hist(cs.plot$nCellTypes, col='gray', breaks=0:max(cs.plot$nCellTypes), main="Credible Sets with EP Predictions", xlab="Cell types per credible set", cex.lab=0.25)
+    for (disease in unique(cs.plot$Disease)) {
+      hist(subset(cs.plot, Disease == disease)$nCellTypes, col='gray', breaks=0:max(cs.plot$nCellTypes), main=paste0("Credible Sets with EP Predictions\n(",disease,")"), xlab="Cell types per credible set")
+    }
+    #hist(subset(cs.plot, CredibleSet %in% filter.cs$CredibleSet)$nCellTypes, col='gray', breaks=0:max(cs.plot$nCellTypes), main="Filtered Credible Sets", xlab="Cell types per credible set")
+    if (!is.null(variants)) 
+      hist(variants$nCellTypes, col='gray', breaks=0:max(variants$nCellTypes,na.rm=T), main="CS Variants with EP Predictions", xlab="Cell types per variant")
+    
+    ## Number of genes per association, variant, or locus
+    hist(cs.plot$nTargetGenes, col='gray', breaks=0:max(cs.plot$nTargetGenes), main="Credible Sets with EP Predictions", xlab="Genes per credible set")
+    #hist(subset(cs.plot, CredibleSet %in% filter.cs$CredibleSet)$nTargetGenes, col='gray', breaks=0:max(cs.plot$nTargetGenes), main="Filtered Credible Sets", xlab="Genes per credible set")
+    if (!is.null(variants)) 
+      hist(variants$nTargetGenes, col='gray', breaks=0:max(variants$nTargetGenes,na.rm=T), main="Variants with EP Predictions", xlab="Genes per variant")
+    
+    ## Relationship between # of diseases and # of immune cell types per association / variant
+    
+    ## Number of overlaps with immune cells vs number of overlaps with matched other cell type
+    ## (enrichment in immune cell overlaps)
+    plotCellTypeCounts(cell.types, main="CS per cell type (all dz)")
+    for (disease in unique(cs.plot$Disease)) {
+      dz.cell.types <- getCellTypeCounts(as.character(as.matrix(cell.types$CellType)), subset(all.flat, CredibleSet %in% subset(cs.plot, Disease == disease)$CredibleSet), control.types, variants, cs.plot)
+      plotCellTypeCounts(dz.cell.types, main=paste0("CS per cell type (",disease,")"))
+    }
+    
+    
+    ## Pathway enrichment of predicted genes vs closest genes
+    
+    ## Highlight examples where closest gene differs from predictions
+    
+    ## Properties of G-E connections:
+    ##   Genes per enhancer as function of cell type
+    ##   Variants that regulate different genes across cell types?
+    ##   This could be a set of functions that we use for analyzing genome-wide predictions as well
+  }
+  
+  
+  
+  getSummaryCSCellTypeCounts <- function(cs.plot) {
+    cs.plot$nBothCellTypes <- with(cs.plot, as.numeric(nImmuneCellTypes > 0 & nControlCellTypes > 0))
+    cs.plot$nControlOnly <- with(cs.plot, as.numeric(nImmuneCellTypes == 0 & nControlCellTypes > 0))
+    apply(cs.plot[,c("start","nImmuneCellTypes","nControlCellTypes","nBothCellTypes","nControlOnly")], 2, function(z) sum(z > 0))
+  }
+  
+  
+  plotCellTypeEnrichmentBarplots <- function(cs.plot, cell.types, permute.cs, permute.cell.types, n.perm, ...) {
+    p <- cell.types$nCredibleSets / (permute.cell.types$nCredibleSets/n.perm + 0.1); names(p) <- cell.types$CellType
+    colors <- c('red','gray')[as.numeric(cell.types$IsControl[order(p)])+1]
+    p <- p[order(p)]
+    par(mar=c(5.1,8.1,4.1,2.1))
+    b <- barplot(p, horiz=TRUE, yaxt='n', col=colors, xlab="Enrichment (Observed / Expected)", main="Credible Sets per Cell Type", ...)
+    axis(2, b, labels=names(p), cex.axis=0.8, las=2)
+    abline(v=1, lty=2, col='gray')
+    
+    p <- cell.types$nSmallCredibleSets / (permute.cell.types$nSmallCredibleSets/n.perm + 0.1); names(p) <- cell.types$CellType
+    colors <- c('red','gray')[as.numeric(cell.types$IsControl[order(p)])+1]
+    p <- p[order(p)]
+    par(mar=c(5.1,8.1,4.1,2.1))
+    b <- barplot(p, horiz=TRUE, yaxt='n', col=colors, xlab="Enrichment (Observed / Expected)", main="Credible Sets (n<=10) per Cell Type", ...)
+    axis(2, b, labels=names(p), cex.axis=0.8, las=2)
+    abline(v=1, lty=2, col='gray')
+    
+    
+    p <- -log10(mapply(function(real, perm) pbinom(real, nrow(cs.plot), perm/nrow(permute.cs), lower.tail=F), cell.types$nCredibleSets, permute.cell.types$nCredibleSets))
+    names(p) <- cell.types$CellType
+    colors <- c('red','gray')[as.numeric(cell.types$IsControl[order(p)])+1]
+    p <- p[order(p)]
+    par(mar=c(5.1,8.1,4.1,2.1))
+    b <- barplot(p, horiz=TRUE, yaxt='n', col=colors, xlab="-log10 P-val (Observed / Expected)", main="Credible Sets per Cell Type", ...)
+    axis(2, b, labels=names(p), cex.axis=0.8, las=2)
+    abline(v=3, lty=2, col='gray')
+    
+    tryCatch({
+      p <- -log10(mapply(function(real, perm) pbinom(real, with(cs.plot, sum(nSNP<=10)), perm/with(permute.cs, sum(nSNP<=10)), lower.tail=F), cell.types$nSmallCredibleSets, permute.cell.types$nSmallCredibleSets))
+      names(p) <- cell.types$CellType
+      colors <- c('red','gray')[as.numeric(cell.types$IsControl[order(p)])+1]
+      p <- p[order(p)]
+      par(mar=c(5.1,8.1,4.1,2.1))
+      b <- barplot(p, horiz=TRUE, yaxt='n', col=colors, xlab="-log10 P-val (Observed / Expected)", main="Credible Sets (n<=10) per Cell Type", ...)
+      axis(2, b, labels=names(p), cex.axis=0.8, las=2)
+      abline(v=3, lty=2, col='gray')
+    }, error = function(e) print("Skipping")
+    )
+  }
+  
+  
+  plotEnhancerOverlapEnrichment <- function(cs.plot, cell.types, permute.cs, permute.cell.types, n.perm=10, ...) {
+    ## Show CDF for cell types per association, versus permuted, broken down by immune cell types vs control cell types
+    par(mar=c(5.1,8.1,4.1,4.1))
+    tp <- rbind(getSummaryCSCellTypeCounts(cs.plot), getSummaryCSCellTypeCounts(permute.cs) / n.perm)
+    b <- barplot(tp, main="# Credible Sets with EP Predictions\nin cell type category", xlab="All CS", horiz=T, yaxt='n', beside=T)
+    text(x = tp, y = b, label = format(tp,digits=1), pos = 4, cex = 1, col = "black")
+    axis(2, selectEveryNth(b,2), labels=c("All","Immune","Control","Both","ControlOnly"), las=2, cex=0.7)
+    legend("topright", c("Expected (permuted)","Observed"), col=c("gray","black"), pch=19)
+    tp <- rbind(getSummaryCSCellTypeCounts(subset(cs.plot, nSNP <= 10)), getSummaryCSCellTypeCounts(subset(permute.cs, nSNP <= 10)) / n.perm)
+    b <- barplot(tp, main="# Credible Sets with EP Predictions\nin cell type category", xlab="CS with <= 10 variants", horiz=TRUE, yaxt='n', beside=T)
+    axis(2, selectEveryNth(b,2), labels=c("All","Immune","Control","Both","ControlOnly"), las=2, cex=0.7)
+    legend("topright", c("Expected (permuted)","Observed"), col=c("gray","black"), pch=19)
+    text(x = tp, y = b, label = format(tp,digits=1), pos = 4, cex = 1, col = "black")
+    
+    plotCellTypeEnrichmentBarplots(cs.plot, cell.types, permute.cs, permute.cell.types, n.perm, ...)
+  }
+  
+  
+  plotGeneByCellTypeHeatmap <- function(cs.name, filter.flat, variant.list, genes, cell.list, buffer=1000000, write.matrix=NULL, ...) {
+    cs.variants <- subset(variant.list, CredibleSet == cs.name)
+    curr.pred <- subset(filter.flat, CredibleSet == cs.name)
+    if (nrow(curr.pred) == 0) return()
+    curr.pred$CellType <- as.character(as.matrix(curr.pred$CellType))
+    
+    ## Plot for all genes within 1 Mb of variants or out to furthest gene
+    #plot.genes <- unique(subset(genes, chr==as.character(as.matrix(cs.variants$chr[1])) & 
+    #  end >= min(min(cs.variants$position)-buffer,min(curr.pred$TargetGeneTSS)) & 
+    #  start <= max(max(cs.variants$position)+buffer,max(curr.pred$TargetGeneTSS)))$symbol)
+    plot.genes <- subset(genes, symbol %in% as.character(as.matrix(unique(curr.pred$TargetGene))))
+    plot.genes <- plot.genes[!duplicated(plot.genes$symbol),]
+    plot.genes <- plot.genes[order(plot.genes$start),]
+    plot.genes <- plot.genes$symbol
+    
+    tab <- matrix(0, nrow=length(cell.list)+1, ncol=length(plot.genes)+1)
+    rownames(tab) <- c(cell.list,""); colnames(tab) <- c(plot.genes,"")
+    for (i in 1:nrow(curr.pred)) {
+      target.gene <- as.character(as.matrix(curr.pred[i,"TargetGene"]))
+      if (!(target.gene %in% plot.genes)) {
+        cat(paste0("Found gene that doesn't match: ", target.gene, "\n"))
+      } else {
+        tryCatch({
+          tab[curr.pred[i,"CellType"], target.gene] <- curr.pred[i,"ABC.Score"]*100
+        }, error = function(e) { print("Caught in plotGeneByCellTypeHeatmap"); browser() })
+      }
+    }
+    
+    if (ncol(tab) < 2) {
+      print(paste0("Skipping ",cs.name," because only 1 gene is predicted"))
+    } else {
+      plotCellTypeHeatmap(tab, ...)
+      if (!is.null(write.matrix)) {
+        write.table(tab, file=write.matrix, sep='\t', quote=F)
+      }
+    }
+  }
+  
+  
+  plotVariantByCellTypeHeatmap <- function(cs.name, filter.flat, variant.list, cell.list, buffer=1000000, ...) {
+    cs.variants <- subset(variant.list, CredibleSet == cs.name)
+    cs.variants <- cs.variants[order(cs.variants$position),]
+    curr.pred <- subset(filter.flat, CredibleSet == cs.name)
+    
+    tab <- matrix(0, nrow=length(cell.list)+1, ncol=nrow(cs.variants)+1)
+    rownames(tab) <- c(cell.list,""); colnames(tab) <- c(as.character(as.matrix(cs.variants$variant)),"")
+    for (i in 1:nrow(curr.pred)) {
+      variant <- as.character(as.matrix(curr.pred[i,"QueryRegionName"]))
+      if (!(variant %in% colnames(tab))) {
+        print(paste0("Skipping ", variant, " because variant is not found"))
+      } else {
+        tab[curr.pred[i,"CellType"], variant] <- curr.pred[i,"ABC.Score"]*100
+      }
+    }
+    
+    if (ncol(tab) < 2) {
+      print(paste0("Skipping ",cs.name," because only 1 variant is predicted"))
+    } else {
+      plotCellTypeHeatmap(tab, ...)
+    }
+  }
+  
+  
+  plotVariantByGeneHeatmap <- function(cs.name, filter.flat, variant.list, genes, buffer=1000000, ...) {
+    cs.variants <- subset(variant.list, CredibleSet == cs.name)
+    cs.variants <- cs.variants[order(cs.variants$position),]
+    curr.pred <- subset(filter.flat, CredibleSet == cs.name)
+    
+    plot.genes <- subset(genes, symbol %in% as.character(as.matrix(unique(curr.pred$TargetGene))))
+    plot.genes <- plot.genes[!duplicated(plot.genes$symbol),]
+    plot.genes <- plot.genes[order(plot.genes$start),]
+    plot.genes <- plot.genes$symbol
+    
+    tab <- matrix(0, nrow=length(plot.genes)+1, ncol=nrow(cs.variants)+1)
+    rownames(tab) <- c(plot.genes,""); colnames(tab) <- c(as.character(as.matrix(cs.variants$variant)),"")
+    for (i in 1:nrow(curr.pred)) {
+      variant <- as.character(as.matrix(curr.pred[i,"QueryRegionName"]))
+      target.gene <- as.character(as.matrix(curr.pred[i,"TargetGene"]))
+      if (!(target.gene %in% plot.genes)) {
+        print(paste0("Found gene that doesn't match: ", target.gene, "\n"))
+      } else if (!(variant %in% colnames(tab))) {
+        print(paste0("Skipping ", variant, " because variant is not found"))
+      } else {
+        tab[target.gene, variant] <- curr.pred[i,"ABC.Score"]*100
+      }
+    }
+    
+    if (ncol(tab) < 2 | nrow(tab) < 2) {
+      print(paste0("Skipping ",cs.name," because only 1 variant is predicted"))
+    } else {
+      plotCellTypeHeatmap(tab, ...)
+    }
+  }
+  
+  plotCredibleSetCellTypeHeatmap <- function(all.flat, return.raw=FALSE, histogram=TRUE, ...) {
+    all.flat <- unfactor(all.flat)
+    tab <- with(all.flat, table(CredibleSet, CellType))
+    tab[tab > 0] <- 1
+    tab <- as.matrix(tab)
+    
+    # add gene list to credible set names
+    tmp <- unique(all.flat[,c("CredibleSet","TargetGene")])
+    cs.gene.map <- with(tmp, tapply(TargetGene, CredibleSet, paste0, collapse=','))
+    rownames(tab) <- paste0(rownames(tab),"  ",cs.gene.map[rownames(tab)])
+    
+    par(mar=c(12,0,4,8))
+    tab.sorted <- plotCredibleSetCellTypeHeatmapHelper(tab, histogram=histogram, breaks=c(-1, 0.5, 1), col=c('white','red'), ...)
+    
+    if (return.raw) return(tab)
+    else return(tab.sorted)
+  }
+  
+  plotCredibleSetCellTypeHeatmapHelper <- function(tab, histogram=TRUE, margins=c(16,16), ...) {
+    #tab <- matrix(0, nrow=length(unique(all.flat$CellType)), ncol=length(unique(all.flat$CredibleSet)))
+    ## SUggest providing col (colors) and breaks (vector)
+    library(gplots)
+    
+    res <- heatmap.2(tab, trace='none', key=F, margins=margins, cex.main=0.8, cexCol=1, cexRow=1, ...)
+    
+    tab <- tab[res$rowInd, res$colInd]
+    
+    if (histogram) {
+      par(mar=c(3,1,1,3))
+      h.row <- apply(tab, 1, sum)
+      h.col <- apply(tab, 2, sum)
+      barplot(h.col, axes=T, ylim=c(0,max(h.col)), space=0, col='gray')
+      barplot(h.row, axes=T, xlim=c(0,max(h.row)), space=0, col='gray', horiz=T)
+    }
+    return(tab)
+  }
+  
+  
+  plotCellTypeHeatmap <- function(tab, ...) {
+    ## Plot a heatmap with genes or variants on X-axis and cell types on Y-axis
+    require(gplots)
+    require(RColorBrewer)
+    par(mar=c(8.1,4.1,4.1,8.1))
+    palette <- colorRampPalette(c("white","red"))(n = 12)
+    heatmap.2(tab, Rowv=F, Colv=F, trace='none', dendrogram='none', col=palette, key=F, 
+              breaks=c(0:10,30,100), margins=c(6,12), cex.main=0.8, cexCol=1, cexRow=1, ...)
+  }
+  
+  getGenesInLocus <- function(genes, locus, buffer=200000) {
+    ixn <- findOverlaps(genes, locus, maxgap=buffer)  
+    return(unique(genes[queryHits(ixn)]$name))
+  }
+  
+  getGeneCellTypeMatrix <- function(gene.name, filter.cs, all.flat, loci, cell.lines, gex, genes=NULL, buffer=200000, include=NULL, locus=NULL) {
+    require(reshape2)
+    if (!is.null(gene.name)) {
+      credible.sets <- subset(filter.cs, CredibleSet %in% subset(all.flat, TargetGene == gene.name)$CredibleSet)
+      locus <- subjectHits(findOverlaps(GRangesFromBed(credible.sets[,c("chr","start","end")]), loci))[1]
+    } else if (is.null(locus)) {
+      print("Must specify locus or gene.name")
+      return(NULL)
+    }
+    credible.sets <- subset(filter.cs, LocusID == locus)
+    curr.pred <- subset(all.flat, CredibleSet %in% credible.sets$CredibleSet & CellType %in% cell.lines)
+    
+    if (is.null(genes)) {
+      predictions <- dcast(curr.pred[,c("CellType","TargetGene","ABC.Score")], CellType ~ TargetGene, mean, value.var="Score.Fraction")
+      rownames(predictions) <- predictions$CellType
+      return(list(predictions=t(predictions[,-1]), gex=gex[colnames(predictions),predictions$CellType]))
+    } else {
+      if (!nrow(curr.pred)) return(NULL)
+      nearby.genes <- intersect(unique(c(getGenesInLocus(GRangesFromBed(genes), loci[locus], buffer=buffer), as.character(as.matrix(curr.pred$TargetGene)))), rownames(gex))
+      if (!is.null(include))
+        nearby.genes <- c(nearby.genes, include)
+      predictions <- matrix(NA, nrow=length(nearby.genes), ncol=length(cell.lines))
+      rownames(predictions) <- nearby.genes
+      colnames(predictions) <- cell.lines
+      for (i in 1:nrow(curr.pred)) {
+        predictions[as.character(as.matrix(curr.pred$TargetGene[i])), 
+                    as.character(as.matrix(curr.pred$CellType[i]))] <- curr.pred$ABC.Score[i]
+      }
+      #browser()
+      return(list(predictions=predictions, gex=gex[rownames(predictions), colnames(predictions)], CredibleSets=credible.sets$CredibleSet))
+    }
+  }
+  
+  getGeneAnnotationDf <- function(m, all.flat, cell.lines, genes.uniq) {
+    nearby.genes <- rownames(m$predictions)
+    
+    ## Reformat as data frame and include annotations
+    g <- subset(genes.uniq, name %in% nearby.genes)
+    g$name <- as.character(as.matrix(g$name))
+    g$TargetGene <- g$name
+    common <- intersect(g$name, rownames(m$gex))
+    for (cell.type in cell.lines) {
+      g[,paste0("TPM.",cell.type)] <- m$gex[g$name,cell.type]
+    }
+    for (cell.type in cell.lines) {
+      g[,paste0("ABC.Score.",cell.type)] <- m$predictions[g$name,cell.type]
+    }
+    
+    g$CredibleSets <- NA
+    g$variants <- NA
+    g$Diseases <- NA
+    for (i in 1:nrow(g)) {
+      g$CredibleSets[i] <- paste0(unique(subset(all.flat, TargetGene == g$TargetGene[i])$CredibleSet), collapse=',')
+      g$variants[i] <- paste0(unique(subset(all.flat, TargetGene == g$TargetGene[i])$QueryRegionName), collapse=',')
+      g$Diseases[i] <- paste0(unique(subset(all.flat, TargetGene == g$TargetGene[i])$Disease), collapse=',')
+      g$CellTypes[i] <- paste0(unique(subset(all.flat, TargetGene == g$TargetGene[i])$CellType), collapse=',')
+    }
+    return(g)
+  }
+  
+  
+  getVariantAnnotationDf <- function(variant.list, all.flat) {
+    all.flat$QueryRegionName <- factor(as.character(as.matrix(all.flat$QueryRegionName)), levels=levels(variant.list$variant))
+    v <- variant.list
+    v$variants <- NA
+    v$Diseases <- NA
+    for (i in 1:nrow(v)) {
+      v$CredibleSets[i] <- paste0(unique(subset(all.flat, QueryRegionName == v$variant[i])$CredibleSet), collapse=',')
+      v$variants[i] <- paste0(unique(subset(all.flat, QueryRegionName == v$variant[i])$QueryRegionName), collapse=',')
+      v$Diseases[i] <- paste0(unique(subset(all.flat, QueryRegionName == v$variant[i])$Disease), collapse=',')
+      v$CellTypes[i] <- paste0(unique(subset(all.flat, QueryRegionName == v$variant[i])$CellType), collapse=',')
+    }
+    return(v)
+  }
+  
+  
+  getCredibleSetDf <- function(all.cs, all.flat, control.types) {
+    ## Columns:
+    ## chr
+    ## start
+    ## end
+    ## name
+    ## Disease
+    ## nSNP
+    ## Coding (variant:gene pairs) .. for now, variant list
+    ## Promoter (variant:gene pairs) .. for now, variant list
+    ## Splice Site (variant:gene pairs) .. for now, variant list
+    ## UTR (variant:gene pairs) .. skip for now
+    ## CTCF Motif (variant list) .. skip for now
+    ## BestSNPposition (SNP with highest p-value / Bayes posterior proability)
+    ## BestSNP (name of SNP)
+    ## BestSNPNearestGene (Gene closest to best SNP)
+    ## LocusID (for linking credible sets in same locus)
+    ## Num Strong Roadmap DHS overlaps .. skip for now
+    ## Num any Roadmap DHS Overlaps .. skip for now
+    ## Variant:CellType:DHS value for Roadmap DHS overlaps .. skip for now
+    
+    ## Variants with Immune-cell ABC predictions
+    ## Genes with Immune-cell ABC predictions
+    ## Cell types with Immune-cell ABC predictions
+    ## Variants with Control-cell ABC predictions
+    ## Genes with Control-cell ABC predictions
+    ## Cell types with Control-cell ABC predictions
+    
+    coding <- unlist(by(variant.list, variant.list$CredibleSet, function(x) {
+      if (any(x$Coding)) paste0(x$variant[x$Coding], collapse=',')
+      else ""
+    }, simplify=FALSE))
+    all.cs$Variants.Coding <- coding[as.character(as.matrix(all.cs$CredibleSet))]
+    
+    ss <- unlist(by(variant.list, variant.list$CredibleSet, function(x) {
+      if (any(x$SpliceSite)) paste0(x$variant[x$SpliceSite], collapse=',')
+      else ""
+    }, simplify=FALSE))
+    all.cs$Variants.SpliceSite <- ss[as.character(as.matrix(all.cs$CredibleSet))]
+    
+    promoter <- unlist(by(variant.list, variant.list$CredibleSet, function(x) {
+      if (any(x$Promoter)) paste0(x$variant[x$Promoter], collapse=',')
+      else ""
+    }, simplify=FALSE))
+    all.cs$Variants.Promoter <- promoter[as.character(as.matrix(all.cs$CredibleSet))]
+    
+    immune.flat <- subset(all.flat, !(CellType %in% control.types))
+    control.flat <- subset(all.flat, CellType %in% control.types)
+    all.cs$Variants.ABC.Immune <- sapply(all.cs$CredibleSet, function(cs) {
+      curr <- subset(immune.flat, CredibleSet == cs)
+      if (nrow(curr) == 0) return("")
+      return(paste0(unique(curr$QueryRegionName), collapse=','))
+    })
+    all.cs$Genes.ABC.Immune <- sapply(all.cs$CredibleSet, function(cs) {
+      curr <- subset(immune.flat, CredibleSet == cs)
+      if (nrow(curr) == 0) return("")
+      return(paste0(unique(curr$TargetGene), collapse=','))
+    })
+    all.cs$CellTypes.ABC.Immune <- sapply(all.cs$CredibleSet, function(cs) {
+      curr <- subset(immune.flat, CredibleSet == cs)
+      if (nrow(curr) == 0) return("")
+      return(paste0(unique(curr$CellType), collapse=','))
+    })
+    
+    all.cs$Variants.ABC.Control <- sapply(all.cs$CredibleSet, function(cs) {
+      curr <- subset(control.flat, CredibleSet == cs)
+      if (nrow(curr) == 0) return("")
+      return(paste0(unique(curr$QueryRegionName), collapse=','))
+    })
+    all.cs$Genes.ABC.Control <- sapply(all.cs$CredibleSet, function(cs) {
+      curr <- subset(control.flat, CredibleSet == cs)
+      if (nrow(curr) == 0) return("")
+      return(paste0(unique(curr$TargetGene), collapse=','))
+    })
+    all.cs$CellTypes.ABC.Control <- sapply(all.cs$CredibleSet, function(cs) {
+      curr <- subset(control.flat, CredibleSet == cs)
+      if (nrow(curr) == 0) return("")
+      return(paste0(unique(curr$CellType), collapse=','))
+    })
+    
+    all.cs$nVariants.ABC.Immune <- sapply(all.cs$Variants.ABC.Immune, function(v) if (is.na(v)) 0 else length(strsplit(v,",")[[1]]))
+    all.cs$nVariants.ABC.Control <- sapply(all.cs$Variants.ABC.Control, function(v) if (is.na(v)) 0 else length(strsplit(v,",")[[1]]))
+    
+    all.cs$nGenes.ABC.Immune <- sapply(all.cs$Genes.ABC.Immune, function(v) if (is.na(v)) 0 else length(strsplit(v,",")[[1]]))
+    all.cs$nGenes.ABC.Control <- sapply(all.cs$Genes.ABC.Control, function(v) if (is.na(v)) 0 else length(strsplit(v,",")[[1]]))
+    
+    all.cs$nCellTypes.ABC.Immune <- sapply(all.cs$CellTypes.ABC.Immune, function(v) if (is.na(v)) 0 else length(strsplit(v,",")[[1]]))
+    all.cs$nCellTypes.ABC.Control <- sapply(all.cs$CellTypes.ABC.Control, function(v) if (is.na(v)) 0 else length(strsplit(v,",")[[1]]))
+    
+    return(all.cs)
+  }
+  
+  
+  
+  # Function to pull flanking sequence. Defaults to +/- 10 bp
+  getSequenceWithSNP <- function(region.chr="chr1", snp.position=114433946, region.start=114433946-10, region.end=114433946+10, alleles=c("G","A")) {
+    ## Temporary method -- doesn't deal with indels.  Use GATK method instead
+    require('BSgenome.Hsapiens.UCSC.hg19')
+    seq  <- as.character(getSeq(Hsapiens,region.chr,region.start,region.end))
+    paste0(substr(seq,0,snp.position-region.start),alleles,substr(seq,snp.position-region.start+2,nchar(seq)))
+  }
+  
+  
+  
+  
+  loadVariantOverlapMatrix <- function(variant.list, dir, cell.types, suffix=".overlaps.txt", score.col=2) {
+    ## Load in overlaps between variants and DHS sites, generated in log.sh
+    ## JE 3/5/18
+    
+    variants <- levels(variant.list$variant)
+    
+    dhs.overlap <- matrix(0, nrow=length(variants), ncol=length(cell.types)) 
+    rownames(dhs.overlap) <- variants
+    colnames(dhs.overlap) <- cell.types
+    
+    ## Loop through cell types and annotate matrix with the designated score column
+    for (cell in cell.types) {
+      file <- paste0(dir, "/", cell, suffix)
+      if (file.exists(file)) {
+        curr <- read.delim(file, header=F)
+        
+        ## Collapse by variant to the highest score
+        variant.scores <- tapply(curr[,score.col], curr[,1], max)
+        variant.scores.df <- data.frame(variant=factor(names(variant.scores), levels=variants), score=variant.scores)
+        
+        ## Add to matrix - uses factor index (see variants and variant.scores.df above) to make it quick
+        dhs.overlap[variant.scores.df$variant,cell] <- variant.scores.df$score
+      } else {
+        dhs.overlap <- dhs.overlap[,-which(colnames(dhs.overlap) == cell)]
+      }
+    }
+    
+    dhs.overlap <- data.frame(variant=levels(variant.list$variant), dhs.overlap)
+    
+    return(dhs.overlap)
+  }
+  
+  plotCredibleSetCellTypeHeatmapFromVariantOverlap <- function(variant.list, overlap.matrix, n.breaks=100, binarize=FALSE, ...) {
+    require(RColorBrewer)
+    
+    overlap.matrix <- merge(variant.list[,c("variant","CredibleSet")], overlap.matrix, by="variant")
+    
+    ## For each credible set, select strongest value for each cell type
+    tab <- do.call(rbind, by(overlap.matrix[,-1:-2], overlap.matrix$CredibleSet, function(x) apply(x, 2, max), simplify=FALSE))
+    #rownames(tab) <- unique(overlap.matrix$CredibleSet)
+    #colnames(tab) <- colnames(overlap.matrix)[-1:-2]
+    #browser()
+    
+    
+    par(mar=c(12,0,4,8))  
+    
+    breaks <- quantile(as.numeric(tab)[as.numeric(tab) > 0], seq(0,1,1/n.breaks))
+    palette <- colorRampPalette(c("white","red"))(n = length(breaks)-1)
+    
+    if (binarize) {
+      tab[tab > 0] <- 1
+      breaks <- c(0,0.5,1)
+      palette <- c("white","red")
+    }
+    tab.sorted <- plotCredibleSetCellTypeHeatmapHelper(tab, histogram=TRUE, breaks=breaks, col=palette, margins=c(16,16), ...)
+    return(tab.sorted)
+  }
+  
+  
+}
