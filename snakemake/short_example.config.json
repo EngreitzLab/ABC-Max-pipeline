@@ -1,0 +1,49 @@
+{
+	"projectDir": "/home/groups/engreitz/Projects/ABC-Max-pipeline/", 
+	"codeDir": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Utilities/",
+	"abcDir": "/home/groups/engreitz/Projects/ABC-Max-pipeline/",
+	"logDir": "/home/groups/engreitz/Projects/ABC-Max-pipeline/log/",
+	"outDir": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_out_kristy/",
+
+	"chrSizes": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/sizes_sorted",
+	"CDS": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/GeneCDS.bed",
+
+	"altPredMethods": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/e2gMethods.txt",
+	"altPred": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/AltPredictions.txt.gz",
+	"altOverlap": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/altOverlapAllSNPs.tsv.gz",
+	"altOverlapCounts": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/altOverlapCounts.tsv",
+	"altOverlapCountsNoncoding": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/altOverlapCounts.AllNoncoding.tsv",
+
+	"bgVariants": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/all.bg.SNPs.bed.gz",
+	"ldScore": "/home/groups/engreitz/Software/ldsc/",
+	"ldResultsUK": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/UKBiobank.DiseaseLDSCv1.1.results.txt",
+	"ldResults": "/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/DiseaseLdscResults.txt",
+
+	"predictions": ["ABC"],
+	"traits": ["IBD"],
+
+	"ABC": {
+		"rawPredFile": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/EnhancerPredictionsAllPutative.txt.gz"],
+		"ABC015PredFile": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.txt.gz"],
+		"shrunkPredFile": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"],
+		"cellParamsABCGWAS": ["CellParams.forABCGWAS.txt"],
+		"predFile": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.ForABCPaperV3.txt.gz"],
+		"genes": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/RefSeqCurated.170308.bed"],
+		"genesUniq": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed"],
+		"celltypeAnnotation": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/CellTypes.Annotated.ABCPaper.txt"],
+		"tissueCategoryCol": ["Categorical.IBDTissueAnnotations"],
+		"predColForStats": ["ConnectionStrengthRank.Binary.IBDRelevant"],
+		"enhancerListBeds": ["/path/to/list_of_celltype_beds.tsv"]
+	},
+
+	"IBD": {
+		"dir": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/Huang2017-IBD/CredibleSets/"],
+		"varList": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBD.set1-2.variant.list.txt"],
+		"csList": ["/home/groups/engreitz/Projects/ABC-Max-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBD.set1-2.cs.txt"],
+		"varFilterCol": ["PosteriorProb"],
+		"varScoreType": ["PP"],
+		"varFilterThreshold": [0.1],
+		"varCtrlThreshold": [0.01]
+	}
+
+}
