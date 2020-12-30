@@ -17,13 +17,14 @@ outdir = "/oak/stanford/groups/akundaje/kmualim/GWAS/"
 if "ABC" in config["predictions"]:
 	outputSet.add(config["ABC"]["shrunkPredFile"][0])
 
-#for pred in config["predictions"]:
-#	for trait in  config["traits"]:
-#		try:
-#			print("{}{}/{}".format(config["outDir"], pred, trait))
-#			os.mkdir(os.path.join(config["outDir"], "{}/{}".format(pred, trait)))
-#		except:
-#			print("Made!")	
+# make directories
+for pred in config["predictions"]:
+	for trait in  config["traits"]:
+		try:
+			print("{}{}/{}".format(config["outDir"], pred, trait))
+			os.mkdir(os.path.join(config["outDir"], "{}/{}".format(pred, trait)))
+		except:
+			print("Made!")	
 
 wildcard_constraints:
 	traits = "|".join([x for x in config["traits"]]),
@@ -31,15 +32,15 @@ wildcard_constraints:
 
 rule all:
 	input:
-		#outputSet,
-#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
-#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
-#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
-#		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-#		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-#		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-#		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"])
-#		expand("{outdir}{pred}/MergedCellTypeEnrichment.tsv", outdir=config["outDir"], pred=config['predictions'])
+		outputSet,
+		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
+		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"]),
+		expand("{outdir}{pred}/MergedCellTypeEnrichment.tsv", outdir=config["outDir"], pred=config['predictions']),
 		expand("{outdir}{pred}/CellTypeEnrichment.{pred}.pdf", outdir=config["outDir"], pred=config["predictions"])
 
 
@@ -234,7 +235,6 @@ rule annotateVariants:
 
 
 # merge all EnrichmentFiles across Traits together for input into PlotCellTypeEnrichment.R
-# need to test this 
 rule EnrichmentAcrossTraits:
 	params:
 		outdir = expand("{outdir}{{pred}}", outdir=config["outDir"])
@@ -256,7 +256,7 @@ rule EnrichmentAcrossTraits:
 			cat title.txt {params.outdir}/MergedCellTypeEnrichment_Test.tsv > {output.enrichmentFile}  	
 			""")
 
-	
+# get enrichment plots	
 rule PlotCellTypeEnrichment:
 	input:
 		enrichmentFile = expand("{outdir}{{pred}}/MergedCellTypeEnrichment.tsv", outdir=config["outDir"])
