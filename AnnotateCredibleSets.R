@@ -231,7 +231,7 @@ if (!(is.null(opt$promoters))) {
                                       bg.vars=bgVars)
 }
 
-#write.tab(enrich, file=paste0(edir, "/Enrichment.CellType.vsScore.", trait,".tsv"))
+write.tab(enrich, file=paste0(edir, "/Enrichment.CellType.vsScore.", trait,".tsv"))
 cell.type.annot <- addEnrichmentSignificantCellTypes(cell.type.annot, enrich, trait)
 
 cell.categories <- colnames(cell.type.annot)[grepl("Categorical.", colnames(cell.type.annot))] 
