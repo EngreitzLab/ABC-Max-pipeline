@@ -3,7 +3,7 @@
 # This snakefile contains the rules for conducting the ABC-Max analysis as in
 # [citation].
 
-configfile: "ABC-Max.config1.json"
+configfile: "ABC-Max.config.json"
 
 from os.path import join
 
@@ -13,9 +13,17 @@ from os.path import join
 
 # Gathering all the outputs for all sets of predictions and variants
 outputSet = set()
-
+outdir = "/oak/stanford/groups/akundaje/kmualim/GWAS/" 
 if "ABC" in config["predictions"]:
 	outputSet.add(config["ABC"]["shrunkPredFile"][0])
+
+#for pred in config["predictions"]:
+#	for trait in  config["traits"]:
+#		try:
+#			print("{}{}/{}".format(config["outDir"], pred, trait))
+#			os.mkdir(os.path.join(config["outDir"], "{}/{}".format(pred, trait)))
+#		except:
+#			print("Made!")	
 
 wildcard_constraints:
 	traits = "|".join([x for x in config["traits"]]),
@@ -24,13 +32,16 @@ wildcard_constraints:
 rule all:
 	input:
 		#outputSet,
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
-		expand("{outdir}/{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand("{outdir}/{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand("{outdir}/{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "/{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"])
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
+#		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"])
+#		expand("{outdir}{pred}/MergedCellTypeEnrichment.tsv", outdir=config["outDir"], pred=config['predictions'])
+		expand("{outdir}{pred}/CellTypeEnrichment.{pred}.pdf", outdir=config["outDir"], pred=config["predictions"])
+
 
 # TODO: Move this to another snakefile?
 rule preprocessABC:
@@ -70,9 +81,6 @@ rule computeBackgroundOverlap:
 	run:
 		shell(
 			"""
-			if [ ! -d "{output.outDir}" ]; then
-                               mkdir {output.outDir}
-                        fi
 			# TODO: find an alternative to deal with pipefail
 			set +o pipefail;
 			# Intersecting a background list of variants with predicted enhancers 
@@ -98,22 +106,20 @@ rule createVarFiles:
 	input:
 		varList = lambda wildcard: config[wildcard.trait]["varList"]
 	output:
-		varBed = expand("{outdir}/{{pred}}/{{trait}}/{{trait}}.bed", outdir=config["outDir"]),
-		varBedgraph = expand("{outdir}/{{pred}}/{{trait}}/{{trait}}.bedgraph", outdir=config["outDir"]),
-		sigvarList = expand("{outdir}/{{pred}}/{{trait}}/{{trait}}.sig.varList.tsv", outdir=config["outDir"])
+		varBed = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bed", outdir=config["outDir"]),
+		varBedgraph = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bedgraph", outdir=config["outDir"]),
+		sigvarList = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.sig.varList.tsv", outdir=config["outDir"])
 	log: os.path.join(config["logDir"], "{trait}.{pred}.createbed.log")
 	params:
 		varFilterCol = lambda wildcard: config[wildcard.trait]["varFilterCol"][0],
 		varFilterThreshold = lambda wildcard: config[wildcard.trait]["varFilterThreshold"][0],
-		outDir = directory(expand("{outdir}/{{pred}}/{{trait}}/", outdir=config["outDir"])),
+		outDir = directory(expand("{outdir}{{pred}}/{{trait}}/", outdir=config["outDir"])),
 		chrSizes = config["chrSizes"]
 	message: "Creating variant BED files"
 	run:
 		if "{params.varFilterCol}" is not None:
 			shell(
 				"""
-				echo "{params.outDir}"
-                                mkdir -p {params.outDir}
 				
 				# Subsetting the variant list based on significance
 				# Finding the score colum
@@ -134,9 +140,7 @@ rule createVarFiles:
 		else:
 			shell(
 				"""
-				if [ ! -d "{params.outDir}" ]; then
-					mkdir {params.outDir}
-				fi
+				#fi
 				# Creating the bed file for all variants
 				# Finding and cutting chr, pos, and var columns
 				cat {input.varList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 > {output.varBed};
@@ -150,10 +154,10 @@ rule overlapVariants:
 	input:
 		predFile = lambda wildcard: config[wildcard.pred]["predFile"][0],
 		varList = lambda wildcard: config[wildcard.trait]["varList"],
-		varBed = expand("{outdir}/{{pred}}/{{trait}}/{{trait}}.bed", outdir=config["outDir"]),
-		varBedgraph = expand("{outdir}/{{pred}}/{{trait}}/{{trait}}.bedgraph", outdir=config["outDir"])
+		varBed = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bed", outdir=config["outDir"]),
+		varBedgraph = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bedgraph", outdir=config["outDir"])
 	output:
-		overlap = expand("{outdir}/{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"])
+		overlap = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"])
 	log: os.path.join(config["logDir"], "{trait}.{pred}.overlap.log")
 	params:
 		chrSizes = config["chrSizes"]
@@ -177,18 +181,17 @@ rule annotateVariants:
 		predFile = lambda wildcard: config[wildcard.pred]["predFile"][0],
 		varList = lambda wildcard: config[wildcard.trait]["varList"],
 		csList = lambda wildcard: config[wildcard.trait]["csList"],
-		predOverlapFile = expand("{outdir}/{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"]),
+		predOverlapFile = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"]),
 		bgVars = config["bgVariants"] 
 	output:
-		touch(os.path.join(config["outDir"], "/{pred}/{trait}/{trait}.{pred}.txt"))
-#		touch(os.path.join(config["outDir"], "/{wildcards.trait}/GenePredictions.all.tsv"))
-#		touch(os.path.join(config["outDir"], "{wildcards.trait}/enrichment/GenePredictions.all.tsv"))
+		touch(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt")),
+		enrichFile = expand("{outdir}{{pred}}/{{trait}}/enrichment/Enrichment.CellType.vsScore.{{trait}}.tsv", outdir=config["outDir"])
 	log: os.path.join(config["logDir"], "{trait}.{pred}.annotate.log")
 	params:
 		cellTypeTable = lambda wildcard: config[wildcard.pred]["celltypeAnnotation"][0],
 		codeDir = config["codeDir"],
 		projectDir = config["projectDir"],
-		outDir = os.path.join(config["outDir"], "/{pred}/{trait}/"),
+		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
 		scoreCol = lambda wildcard: config[wildcard.trait]["varFilterCol"][0],
 		scoreType = lambda wildcard: config[wildcard.trait]["varScoreType"][0],
 		scoreThreshold = lambda wildcard: config[wildcard.trait]["varFilterThreshold"][0],
@@ -197,13 +200,14 @@ rule annotateVariants:
 	message: "Annotating {wildcards.trait} variants with {wildcards.pred} predictions"
 	run:
 		# If using ABC predictions, plotting some additional features
-		if list({wildcards.pred}).str.contains("ABC"):
+		if any(s.startswith('ABC') for s in list({wildcards.pred})):
 			shell(
 				"""
 				Rscript {params.projectDir}/AnnotateCredibleSets.R \
 				--variants {input.varList} \
 				--predictionFile {input.predOverlapFile} \
 				--outbase {params.outDir} \
+				--trait {wildcards.trait} \
 				--credibleSets {input.csList} \
 				--codeDir {params.codeDir} \
 				--cellTypeTable {params.cellTypeTable} \
@@ -217,6 +221,7 @@ rule annotateVariants:
 				--predictionFile {input.predOverlapFile} \
 				--isABC FALSE \
 				--outbase {params.outDir} \
+				--trait {wildcards.trait} \
 				--credibleSets {input.csList} \
 				--codeDir {params.codeDir} \
 				--variantScoreCol {params.scoreCol} \
@@ -228,4 +233,46 @@ rule annotateVariants:
 				""")
 
 
+# merge all EnrichmentFiles across Traits together for input into PlotCellTypeEnrichment.R
+# need to test this 
+rule EnrichmentAcrossTraits:
+	params:
+		outdir = expand("{outdir}{{pred}}", outdir=config["outDir"])
+	output: 
+		enrichmentFile = expand("{outdir}{{pred}}/MergedCellTypeEnrichment.tsv", outdir=config["outDir"])
+	run:
+		shell(
+			"""
+			set +o pipefail;
+			
+			file=$(ls {params.outdir}/*/enrichment/Enrichment.CellType.vsScore.*.tsv | head -1);
+			cat $file | head -1 > title.txt;
 
+			for file_ in $(ls {params.outdir}/*/enrichment/Enrichment.CellType.vsScore.*.tsv);
+			do
+				cat $file_ | sed -e '1d' >> {params.outdir}/MergedCellTypeEnrichment_Test.tsv;
+			done;	
+		
+			cat title.txt {params.outdir}/MergedCellTypeEnrichment_Test.tsv > {output.enrichmentFile}  	
+			""")
+
+	
+rule PlotCellTypeEnrichment:
+	input:
+		enrichmentFile = expand("{outdir}{{pred}}/MergedCellTypeEnrichment.tsv", outdir=config["outDir"])
+	params:
+		projectDir = config["projectDir"],
+		outDir = os.path.join(config["outDir"], "{pred}/"),
+		cellTypes = lambda wildcard: config[wildcard.pred]["celltypeAnnotation"]
+	output:
+		expand("{outdir}{{pred}}/CellTypeEnrichment.{{pred}}.pdf", outdir = config["outDir"])
+	run:
+		shell(
+			"""
+			Rscript {params.projectDir}/PlotCellTypeEnrichment.R \
+			--outdir {params.outDir} \
+			--cellTypes {params.cellTypes} \
+			--codeDir {params.projectDir} \
+			--cellTypeEnrichments {input.enrichmentFile} \
+			--pred {wildcards.pred}
+			""")
