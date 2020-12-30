@@ -157,6 +157,181 @@
             "/path/to/list_of_celltype_beds.tsv"
         ]
     },
+  "ABC_100": {
+        "rawPredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/EnhancerPredictionsAllPutative.txt.gz"
+        ],
+        "ABC015PredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.txt.gz"
+        ],
+        "shrunkPredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"
+        ],
+        "cellParamsABCGWAS": [
+            "CellParams.forABCGWAS.txt"
+        ],
+        "predFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.100.txt.gz"
+        ],
+        "genes": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed"
+        ],
+        "genesUniq": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed"
+        ],
+        "celltypeAnnotation": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/CellTypes.Annotated.ABCPaper.txt"
+        ],
+        "tissueCategoryCol": [
+            "Categorical.IBDTissueAnnotations"
+        ],
+        "predColForStats": [
+            "ConnectionStrengthRank.Binary.IBDRelevant"
+        ],
+        "enhancerListBeds": [
+            "/path/to/list_of_celltype_beds.tsv"
+        ]
+    },
+    "ABC_200": {
+        "rawPredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/EnhancerPredictionsAllPutative.txt.gz"
+        ],
+        "ABC015PredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.txt.gz"
+        ],
+        "shrunkPredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"
+        ],
+        "cellParamsABCGWAS": [
+            "CellParams.forABCGWAS.txt"
+        ],
+        "predFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.200.txt.gz"
+        ],
+        "genes": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed"
+        ],
+        "genesUniq": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed"
+        ],
+        "celltypeAnnotation": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/CellTypes.Annotated.ABCPaper.txt"
+        ],
+        "tissueCategoryCol": [
+            "Categorical.IBDTissueAnnotations"
+        ],
+        "predColForStats": [
+            "ConnectionStrengthRank.Binary.IBDRelevant"
+        ],
+        "enhancerListBeds": [
+            "/path/to/list_of_celltype_beds.tsv"
+        ]
+    },
+    "ABC_300": {
+        "rawPredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/EnhancerPredictionsAllPutative.txt.gz"
+        ],
+        "ABC015PredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.txt.gz"
+        ],
+        "shrunkPredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"
+        ],
+        "cellParamsABCGWAS": [
+            "CellParams.forABCGWAS.txt"
+        ],
+        "predFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.300.txt.gz"
+        ],
+        "genes": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed"
+        ],
+        "genesUniq": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed"
+        ],
+        "celltypeAnnotation": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/CellTypes.Annotated.ABCPaper.txt"
+        ],
+        "tissueCategoryCol": [
+            "Categorical.IBDTissueAnnotations"
+        ],
+        "predColForStats": [
+            "ConnectionStrengthRank.Binary.IBDRelevant"
+        ],
+        "enhancerListBeds": [
+            "/path/to/list_of_celltype_beds.tsv"
+        ]
+    },
+    "ABC_400": {
+        "rawPredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/EnhancerPredictionsAllPutative.txt.gz"
+        ],
+        "ABC015PredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.txt.gz"
+        ],
+        "shrunkPredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"
+        ],
+        "cellParamsABCGWAS": [
+            "CellParams.forABCGWAS.txt"
+        ],
+        "predFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.400.txt.gz"
+        ],
+        "genes": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed"
+        ],
+        "genesUniq": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed"
+        ],
+        "celltypeAnnotation": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/CellTypes.Annotated.ABCPaper.txt"
+        ],
+        "tissueCategoryCol": [
+            "Categorical.IBDTissueAnnotations"
+        ],
+        "predColForStats": [
+            "ConnectionStrengthRank.Binary.IBDRelevant"
+        ],
+        "enhancerListBeds": [
+            "/path/to/list_of_celltype_beds.tsv"
+        ]
+    },
+    "ABC_500": {
+        "rawPredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/EnhancerPredictionsAllPutative.txt.gz"
+        ],
+        "ABC015PredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.txt.gz"
+        ],
+        "shrunkPredFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"
+        ],
+        "cellParamsABCGWAS": [
+            "CellParams.forABCGWAS.txt"
+        ],
+        "predFile": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.500.txt.gz"
+        ],
+        "genes": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed"
+        ],
+        "genesUniq": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed"
+        ],
+        "celltypeAnnotation": [
+            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/CellTypes.Annotated.ABCPaper.txt"
+        ],
+        "tissueCategoryCol": [
+            "Categorical.IBDTissueAnnotations"
+        ],
+        "predColForStats": [
+            "ConnectionStrengthRank.Binary.IBDRelevant"
+        ],
+        "enhancerListBeds": [
+            "/path/to/list_of_celltype_beds.tsv"
+        ]
+    },
     "IBD": {
         "dir": "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/data/data/191010_UKBB_SUSIE/CredibleSetsFixed/IBD/",
         "varList": "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/data/data/191010_UKBB_SUSIE/CredibleSetsFixed/IBD/variant.list.txt",
@@ -1788,180 +1963,6 @@
         "varCtrlThreshold": [
             0.01
         ]
-    },
-    "ABC_100": {
-        "rawPredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/EnhancerPredictionsAllPutative.txt.gz"
-        ],
-        "ABC015PredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.txt.gz"
-        ],
-        "shrunkPredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"
-        ],
-        "cellParamsABCGWAS": [
-            "CellParams.forABCGWAS.txt"
-        ],
-        "predFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.100.txt.gz"
-        ],
-        "genes": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed"
-        ],
-        "genesUniq": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed"
-        ],
-        "celltypeAnnotation": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/CellTypes.Annotated.ABCPaper.txt"
-        ],
-        "tissueCategoryCol": [
-            "Categorical.IBDTissueAnnotations"
-        ],
-        "predColForStats": [
-            "ConnectionStrengthRank.Binary.IBDRelevant"
-        ],
-        "enhancerListBeds": [
-            "/path/to/list_of_celltype_beds.tsv"
-        ]
-    },
-    "ABC_200": {
-        "rawPredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/EnhancerPredictionsAllPutative.txt.gz"
-        ],
-        "ABC015PredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.txt.gz"
-        ],
-        "shrunkPredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"
-        ],
-        "cellParamsABCGWAS": [
-            "CellParams.forABCGWAS.txt"
-        ],
-        "predFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.200.txt.gz"
-        ],
-        "genes": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed"
-        ],
-        "genesUniq": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed"
-        ],
-        "celltypeAnnotation": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/CellTypes.Annotated.ABCPaper.txt"
-        ],
-        "tissueCategoryCol": [
-            "Categorical.IBDTissueAnnotations"
-        ],
-        "predColForStats": [
-            "ConnectionStrengthRank.Binary.IBDRelevant"
-        ],
-        "enhancerListBeds": [
-            "/path/to/list_of_celltype_beds.tsv"
-        ]
-    },
-    "ABC_300": {
-        "rawPredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/EnhancerPredictionsAllPutative.txt.gz"
-        ],
-        "ABC015PredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.txt.gz"
-        ],
-        "shrunkPredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"
-        ],
-        "cellParamsABCGWAS": [
-            "CellParams.forABCGWAS.txt"
-        ],
-        "predFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.300.txt.gz"
-        ],
-        "genes": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed"
-        ],
-        "genesUniq": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed"
-        ],
-        "celltypeAnnotation": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/CellTypes.Annotated.ABCPaper.txt"
-        ],
-        "tissueCategoryCol": [
-            "Categorical.IBDTissueAnnotations"
-        ],
-        "predColForStats": [
-            "ConnectionStrengthRank.Binary.IBDRelevant"
-        ],
-        "enhancerListBeds": [
-            "/path/to/list_of_celltype_beds.tsv"
-        ]
-    },
-    "ABC_400": {
-        "rawPredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/EnhancerPredictionsAllPutative.txt.gz"
-        ],
-        "ABC015PredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.txt.gz"
-        ],
-        "shrunkPredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"
-        ],
-        "cellParamsABCGWAS": [
-            "CellParams.forABCGWAS.txt"
-        ],
-        "predFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.400.txt.gz"
-        ],
-        "genes": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed"
-        ],
-        "genesUniq": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed"
-        ],
-        "celltypeAnnotation": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/CellTypes.Annotated.ABCPaper.txt"
-        ],
-        "tissueCategoryCol": [
-            "Categorical.IBDTissueAnnotations"
-        ],
-        "predColForStats": [
-            "ConnectionStrengthRank.Binary.IBDRelevant"
-        ],
-        "enhancerListBeds": [
-            "/path/to/list_of_celltype_beds.tsv"
-        ]
-    },
-    "ABC_500": {
-        "rawPredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/EnhancerPredictionsAllPutative.txt.gz"
-        ],
-        "ABC015PredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.txt.gz"
-        ],
-        "shrunkPredFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.minus150.txt.gz"
-        ],
-        "cellParamsABCGWAS": [
-            "CellParams.forABCGWAS.txt"
-        ],
-        "predFile": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/AllPredictions.AvgHiC.ABC0.015.500.txt.gz"
-        ],
-        "genes": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed"
-        ],
-        "genesUniq": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed"
-        ],
-        "celltypeAnnotation": [
-            "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/CellTypes.Annotated.ABCPaper.txt"
-        ],
-        "tissueCategoryCol": [
-            "Categorical.IBDTissueAnnotations"
-        ],
-        "predColForStats": [
-            "ConnectionStrengthRank.Binary.IBDRelevant"
-        ],
-        "enhancerListBeds": [
-            "/path/to/list_of_celltype_beds.tsv"
-        ]
     }
 }
+
