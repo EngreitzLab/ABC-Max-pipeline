@@ -12,25 +12,25 @@ pull <- function(x,y) {x[,if(is.name(substitute(y))) deparse(substitute(y)) else
 ## Functions to load in variant predictions from ABC
 
 # TODO: edit so that colMap is no longer needed
-loadVariantOverlap <- function(overlap.file, genes.uniq, genes, variant.names=NULL, colMap=NULL, overwriteTSS=FALSE) {
+loadVariantOverlap <- function(overlap.file, genes.uniq, genes, variant.names=NULL, colMap=NULL, overwriteTSS=FALSE, isTargetGene=TRUE, isTargetGeneTSS=TRUE) {
   ## Loads overlap file, and filters to variants in variant.names
   x <- read.delim(gzfile(overlap.file), check.names=F)
   
-  if (!is.null(colMap)) {
-    colMap <- unfactor(colMap)
-    ## Added for remapping ABC columns from new ABC prediction format to column names expected by this R codebase JME 191221
-    for (i in 1:nrow(colMap)) {
-      oldCol <- colMap$FileColumns[i]
-      newCol <- colMap$CodeColumns[i]
-      if (oldCol == "") {
-        x[newCol] <- NA
-      } else if (oldCol %in% colnames(x)) {
-        colnames(x)[colnames(x) == oldCol] <- newCol
-      } else {
-        stop(paste0("Mapping column names in loadVariantOverlap: Column name ", oldCol, " not found."))
-      }
-    }
-  }
+  #if (!is.null(colMap)) {
+  #  colMap <- unfactor(colMap)
+  #  ## Added for remapping ABC columns from new ABC prediction format to column names expected by this R codebase JME 191221
+  #  for (i in 1:nrow(colMap)) {
+  #    oldCol <- colMap$FileColumns[i]
+  #    newCol <- colMap$CodeColumns[i]
+  #    if (oldCol == "") {
+  #      x[newCol] <- NA
+  #    } else if (oldCol %in% colnames(x)) {
+  #      colnames(x)[colnames(x) == oldCol] <- newCol
+  #    } else {
+  #      stop(paste0("Mapping column names in loadVariantOverlap: Column name ", oldCol, " not found."))
+  #    }
+  #  }
+  #}
   
   if (!is.null(variant.names)) {
     tmp <- data.frame(variant=factor(as.character(as.matrix(variant.names)), levels=levels(x$QueryRegionName)))
@@ -43,11 +43,15 @@ loadVariantOverlap <- function(overlap.file, genes.uniq, genes, variant.names=NU
     if ("TargetGeneTSS" %in% colnames(x)) x <- x %>% select(-TargetGeneTSS)
     x <- merge(x, with(genes.uniq, data.frame(TargetGene=name, TargetGeneTSS=tss)), by="TargetGene")
   }
+  
+  if (isTargetGeneTSS){
   x$isOwnTSS <- with(x, TargetGeneTSS >= start & TargetGeneTSS <= end)
-  
+  }
   codingSymbols <- subset(genes, grepl(";NM_", name))$symbol
-  x$TargetGeneIsCoding <- as.character(as.matrix(x$TargetGene)) %in% codingSymbols
   
+  if (isTargetGene){
+  x$TargetGeneIsCoding <- as.character(as.matrix(x$TargetGene)) %in% codingSymbols
+  }
   return(x)
 }
 
@@ -124,9 +128,18 @@ loadOneGeneList <- function(file) {
 # Changed to use score col instead of PP
 # Changed ABC.Score to ABC.score, is this correct?
 # TODO: use column name based on selection
-getVariantByCellsTable <- function(overlap, score.col="PosteriorProb") {
-  variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), max.ABC=max(ABC.Score), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
+getVariantByCellsTable <- function(overlap, score.col="PosteriorProb", isTargetGene=TRUE, isCellType=TRUE) {
+   if ((isCellType)&(isTargetGene)) {
+  	variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), max.ABC=max(ABC.Score), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
+  } else {
+	  if ((!isTargetGene)&(!isCellType)) {
+  		variant.by.cells <- overlap %>% group_by(QueryRegionName) %>% summarise( n.genes=n(), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
+	  } else if (isCellType) {
+		  variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
+	  } else if (isTargetGene) {
+		  variant.by.cells <- overlap %>% group_by(QueryRegionName) %>% summarise( n.genes=n(), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()}
   return(variant.by.cells)
+}
 }
 
 # Changed ABC.Score to ABC.score
@@ -211,7 +224,7 @@ computeCellTypeEnrichmentByPermutation <- function(variant.names, label, cell.ty
 }
 
 
-computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type.annot, cell.group.by=NULL, score.col="PosteriorProb", min.score=0.1, bg.vars=NULL, noPromoter=FALSE) {
+computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type.annot, trait, cell.group.by=NULL, score.col="PosteriorProb", min.score=0.1, bg.vars=NULL, bg.overlap=NULL, noPromoter=FALSE, isCellType=TRUE) {
   ## Computes the enrichment of variants with high vs low posterior probabilities in each cell type
   ## variants.by.cells    data.frame output by getVariantByCellsTable
   ## variant.list         data.frame with all variant info. Will subset the variants.by.cells df by this list of variants
@@ -237,13 +250,21 @@ computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type
   
   message(cell.group.by)
   group.list <- if (!is.null(cell.group.by)) cell.type.annot[[cell.group.by]] else NULL
-  hi.count <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.list, variant.names=hi.vars, cell.groups=group.list)
+  if (isCellType){
+  	hi.count <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.annot, variant.names=hi.vars, cell.groups=group.list)
+  	bg_V8_count <- bg.overlap %>% distinct(V4,V8)
+	bg_V8 <- bg_V8_count %>% group_by(V8) %>% tally()
+	hi.count$n.ctrl <- bg_V8$n
+  } else {
+	  hi.count  <- variants.by.cells %>% filter(QueryRegionName %in% hi.vars)
+	  hi.count <- data.frame(n=length(hi.count$QueryRegionName))
+	  bg_V8 <- bg.overlap %>% distinct(V4)
+	  hi.count$n.ctrl <- length(unique(bg_V8$V4))
+  }
 #  bg.count <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.list, variant.names=bg.vars, cell.groups=group.list)
-  bg_V8 <- bg.vars %>% count(V8)
-  weighted.count <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.list, variant.names=variant.list$variant, cell.groups=group.list, weightByPIP=TRUE)
+  #weighted.count <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.list, variant.names=variant.list$variant, cell.groups=group.list, weightByPIP=TRUE)
 #  print(length(hi.count))
 #  print(length(bg$n))
-  hi.count$n.ctrl <- bg_V8$n
   hi.count$total <- length(hi.vars)
   hi.count$total.ctrl <- length(bg.vars$V4)
   # What to use as prop.snps?
@@ -254,8 +275,8 @@ computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type
   hi.count$p <- with(hi.count, mapply(FUN=phyper, n, total, total.ctrl, n+n.ctrl, log.p=FALSE, lower.tail=F))
   hi.count$Significant <- p.adjust((hi.count$p), method="bonferroni") < 0.001
   hi.count$enrichment[with(hi.count, n==0 & n.ctrl==0)] <- NA
-  hi.count$n.weighted <- weighted.count$n
-  hi.count$total.weighted <- sum(variant.list[score.col])
+  #hi.count$n.weighted <- weighted.count$n
+  #hi.count$total.weighted <- sum(variant.list[score.col])
   #hi.count$vsGenome.enrichment <- with(hi.count, n/total / LDSC.Prop._SNPs)
   #hi.count$vsGenome.log10pBinom <- with(hi.count, pbinom(n, total, prop.snps, lower.tail=FALSE, log.p=TRUE)) / log(10)
   #hi.count$vsGenome.Significant <- p.adjust(10^(hi.count$vsGenome.log10pBinom), method="bonferroni") < 0.001
@@ -272,8 +293,13 @@ computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type
   #  hi.count$vsGenome.Significant <- p.adjust(10^(hi.count$vsGenome.log10pBinom), method="bonferroni") < 0.001
   #  hi.count$vsGenome.PIPWeighted.enrichment <- with(hi.count, n.weighted/total.weighted / LDSC.Prop._SNPs)
   #}
-  
-  hi.count <- merge(hi.count, cell.type.annot, all.x=TRUE, by="CellType")
+  #if (isCellType){
+  #	hi.count <- tryCatch({merge(hi.count, cell.type.annot, all.x=TRUE, by="CellType")}, 
+  #      	    error = function(e){
+  #      		        hi.count
+  #      	     })
+  #} 
+  #write.tab(hi.count, file="hi.count.tsv")
   #hi.count <- hi.count %>% arrange(desc(log10.p))
   
   return(hi.count)

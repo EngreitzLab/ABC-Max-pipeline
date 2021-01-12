@@ -47,7 +47,6 @@ Credible set list (csList)
 
 ## Dependencies
 
-TODO: R packages as an renv?
 Dependencies for running the snakemake workflow are distributed as a Conda environment (ABC-Max_env.yaml). 
 * snakemake
 
@@ -65,6 +64,9 @@ Additionally, the following R packages are required:
 
 If starting with the raw-outputs of the ABC-pipeline, the first step in the ABC-Max snakemake (rule preprocessABC) removes promoter elements, filters the predictions to retain those with an ABC score >=0.15, and shrinks the elements from 500bp to 200bp. These steps are executed is the raw ABC prediction (rawPredFile) are provided, but the processed predictions (predFile) are not.
 
+Example command:
+
+
 ###  1. Compute background overlap (rule: computeBackgroundOverlap)
 Intersecting a background list of variants with predicted enhancers to compute background rate at which common variants overlap enhancers overall. This is done for all variants and non-coding variants.
 
@@ -77,4 +79,7 @@ Intersecting (significant) variants with predicted enhancers.
 ### 4. Annotate variants (rule: annotateVariants)
 Calling an R script to run ABC-Max.
 
-
+Example command: 
+```
+Rscript AnnotateCredibleSets.R --variants /oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.variant.list.txt --credibleSets /oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.cs.txt --outbase /oak/stanford/groups/akundaje/kmualim/test_code//ABC/IBD/ --trait IBD --codeDir /oak/stanford/groups/akundaje/kmualim/github/ABC-Max-pipeline/Utilities/ --predictionFile /oak/stanford/groups/akundaje/kmualim/GWAS_1/ABC/IBD/IBD.ABC.tsv.gz --bgOverlap /oak/stanford/groups/akundaje/kmualim/GWAS_1/ABC/ABC.OverlapAllSNPs.tsv.gz --cellType TRUE --TargetGene TRUE --TargetGeneTSS TRUE
+```
