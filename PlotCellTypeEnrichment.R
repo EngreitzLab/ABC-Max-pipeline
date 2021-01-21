@@ -12,7 +12,8 @@ option.list <- list(
   make_option("--cellTypes", type="character", help="Cell type annotation file", default="Test_data/CellTypes.Annotated.ABCPaper.txt"),
   make_option("--cellTypeEnrichments", type="character", default="plots/CellTypeEnrichment.tsv", help="File containing merged cell type enrichments across traits"),
   make_option("--codeDir", type="character", default="ABC-Max-pipeline/"),
-  make_option("--pred", type="character", default="ABC"))
+  make_option("--trait", type="character", default="trait_name"))
+
 opt <- parse_args(OptionParser(option_list=option.list))
 dput(opt)
 
@@ -27,7 +28,7 @@ source(paste0(opt$codeDir, "/Utilities/JuicerUtilities.R"))
 source(paste0(opt$codeDir, "/Utilities/CredibleSetTools.R"))
 
 setwd(opt$outdir)
-save.image(file=paste0(opt$outdir, "/IBD.RData"))
+save.image(file=paste0(opt$outdir, "/", opt$trait, ".RData"))
 
 ###################################################
 ## Load in data relevant to IBD and format for plotting
@@ -46,19 +47,19 @@ mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 45, vjust 
 {
   ibdEnhancerList <- cell.type.annot.all
   enrichPlot <- merge(cellEnrichment, cell.type.annot.all[,c("CellType","Categorical.IBDTissueAnnotations2")], by="CellType")
-  ibdEnhancerList <- merge(ibdEnhancerList, subset(enrichPlot, Disease == "IBD")[,c("CellType","enrichment")], by="CellType")
+  ibdEnhancerList <- merge(ibdEnhancerList, subset(enrichPlot, Disease == opt$trait)[,c("CellType","enrichment")], by="CellType")
   ibdEnhancerList$CellCat <- ibdEnhancerList$Categorical.IBDTissueAnnotations2
   ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(cell.type.annot.all[order(cell.type.annot.all$Categorical.IBDTissueAnnotations2),"CellType"]))
 
-  formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=brewer.pal(n = 8, name = "Dark2")[-5]) + ylab("Enrichment\n(IBD variants / all variants)")
-  pdf(file=paste0(opt$outdir, "/CellTypeEnrichment.", opt$pred, ".pdf"), width=5, height=4)
+  formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=brewer.pal(n = 8, name = "Dark2")[-5]) + ylab(paste0("Enrichment\n( ", opt$trait, " variants / all variants)"))
+  pdf(file=paste0(opt$outdir, "/CellTypeEnrichment.", opt$trait, ".pdf"), width=5, height=4)
   p1 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment, color=CellCat)) + ggtitle("ABC Enhancers") 
   p1 <- p1 %>% formatEnrichmentBarPlot()
   print(p1)
-  ggsave(paste0(opt$outdir, "/CellTypeEnrichment.", opt$pred, ".eps"), width=5, height=4)
+  ggsave(paste0(opt$outdir, "/CellTypeEnrichment.", opt$trait, ".eps"), width=5, height=4)
   dev.off()
 }
 
-save.image(file=paste0(opt$outdir, "/IBD.RData"))
+save.image(file=paste0(opt$outdir, "/", opt$trait, ".RData"))
 
 

@@ -83,3 +83,11 @@ Example command:
 ```
 Rscript AnnotateCredibleSets.R --variants /oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.variant.list.txt --credibleSets /oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.cs.txt --outbase /oak/stanford/groups/akundaje/kmualim/test_code//ABC/IBD/ --trait IBD --codeDir /oak/stanford/groups/akundaje/kmualim/github/ABC-Max-pipeline/Utilities/ --predictionFile /oak/stanford/groups/akundaje/kmualim/GWAS_1/ABC/IBD/IBD.ABC.tsv.gz --bgOverlap /oak/stanford/groups/akundaje/kmualim/GWAS_1/ABC/ABC.OverlapAllSNPs.tsv.gz --cellType TRUE --TargetGene TRUE --TargetGeneTSS TRUE
 ```
+
+### 5. Run Enrichment Plots 
+Calling python script to take in all the enrichment files across different predictors to output a consolidated enrichment plot 
+
+Example command:
+```
+python PlotAggregate.py --traits IBD_1.txt --data_outdir /oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/GWAS_1/ --outdir /oak/stanford/groups/akundaje/kmualim/github/ABC-Max-pipeline/tests --predictors predictors.txt
+```
