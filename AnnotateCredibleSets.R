@@ -23,9 +23,9 @@ option.list <- list(
   make_option("--isABC", type="logical", default=FALSE, help="Using ABC predictions? If TRUE, some additional metrics are plotted."),
   make_option("--predScore", type="character", default="ABC.Score", help="Name of the column with the prediction score, e.g. ABC-score."),
   make_option("--outbase", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_out/IBD/", help="Output file basename"),
-  make_option("--cellType", type="logical", default=TRUE, help="Do predictions have an associated cellType column?"),
-  make_option("--TargetGene", type="logical", default=TRUE, help="Do predictions have an associated targetGene column?"),
-  make_option("--TargetGeneTSS", type="logical", default=TRUE, help="Do predictions have an associated targetGeneTSS column?"),
+  make_option("--cellType", type="character", default=TRUE, help="Do predictions have an associated cellType column?"),
+  make_option("--TargetGene", type="character", default=TRUE, help="Do predictions have an associated targetGene column?"),
+  make_option("--TargetGeneTSS", type="character", default=TRUE, help="Do predictions have an associated targetGeneTSS column?"),
   # TODO: edit downstream steps so that these are only used for ABC predictions
   make_option("--cutoff", type="numeric", default=0.015, help="Cutoff on ABC score for distal elements"),
   make_option("--cutoffTss", type="numeric", default=0.1, help="Cutoff on ABC score for tss/promoter elements"),
@@ -57,7 +57,6 @@ option.list <- list(
 )
 
 opt <- parse_args(OptionParser(option_list=option.list))
-
 
 # Loading libraries and utilities
 suppressPackageStartupMessages(library(dplyr))
@@ -94,7 +93,7 @@ variant.list <- read.delim(opt$variants, check.names=F)
 # Finding a vector of relevant cell types
 # TODO: Requirements for this file?
 # TODO: only use this celltype table is using the ABC predictions. Else?
-if (!(is.null(opt$cellTypeTable))) {	
+if (opt$cellTypeTable == "TRUE") {	
 	cell.type.annot <- read.delim(opt$cellTypeTable, check.names=F)
 	cell.type.list <- cell.type.annot$CellType
 } else {
@@ -135,7 +134,7 @@ if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
 # the required column names
 if (opt$isABC){
   predColMap <- if (!is.null(opt$predColMap)) read.delim(opt$predColMap, stringsAsFactors=F) else NULL
-  overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, colMap=predColMap)
+  overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, colMap=predColMap, isTargetGene=opt$TargetGene, isTargetGeneTSS=opt$TargetGeneTSS)
   overlap <- filterVariantOverlap(overlap, opt$cutoff, opt$cutoffTss, hk.list)  
 } else {
   overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, isTargetGene=opt$TargetGene, isTargetGeneTSS=opt$TargetGeneTSS)
