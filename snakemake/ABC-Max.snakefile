@@ -17,15 +17,6 @@ outdir = "/oak/stanford/groups/akundaje/kmualim/GWAS/"
 if "ABC" in config["predictions"]:
 	outputSet.add(config["ABC"]["shrunkPredFile"][0])
 
-# make directories
-for pred in config["predictions"]:
-	for trait in  config["traits"]:
-		try:
-			print("{}{}/{}".format(config["outDir"], pred, trait))
-			os.mkdir(os.path.join(config["outDir"], "{}/{}".format(pred, trait)))
-		except:
-			print("Made!")	
-
 wildcard_constraints:
 	traits = "|".join([x for x in config["traits"]]),
 	pred = "|".join([x for x in config["predictions"]])
@@ -39,31 +30,8 @@ rule all:
 		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"]),
-		expand("{outdir}{pred}/MergedCellTypeEnrichment.tsv", outdir=config["outDir"], pred=config['predictions']),
-		expand("{outdir}{pred}/CellTypeEnrichment.{pred}.pdf", outdir=config["outDir"], pred=config["predictions"])
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"])
 
-
-# TODO: Move this to another snakefile?
-rule preprocessABC:
-	input:
-		rawPredFile = config["ABC"]["rawPredFile"][0]
-	output:
-		ABC015predFile = config["ABC"]["ABC015PredFile"][0],
-		shrunkPredFile = config["ABC"]["shrunkPredFile"][0]
-	params:
-		chrSizes = config["chrSizes"]
-	message: "Preprocessing ABC predictions"
-	run:
-		shell(
-			"""
-			# Removing promoter elements, retaining predictions with an ABC score >0.15
-			zcat {input.rawPredFile} | sed 1d | awk '(($5 != "promoter" && $21>=0.015) || ($5 == "promoter" && $21>=0.1)) && $21 != "NaN" && int($12) <= 2000000'| bedtools sort -i stdin -faidx {params.chrSizes} | gzip > {input.ABC015predFile}
-
-			# Shrinking elements from 500bp to 200bp
-			zcat {input.ABC015predFile} | head -1 | gzip > {input.shrunkPredFile}
-			zcat {input.ABC015predFile} | sed 1d | bedtools slop -b -150 -g {params.chrSizes} | gzip >> {input.shrunkPredFile}
-			""")
 
 rule computeBackgroundOverlap:
 	input:
@@ -212,7 +180,7 @@ rule annotateVariants:
 				--credibleSets {input.csList} \
 				--codeDir {params.codeDir} \
 				--cellTypeTable {params.cellTypeTable} \
-				--genes {params.geneLists}
+				--genes {params.geneLists} 
 				""")
 		else:
 			shell(
@@ -230,7 +198,7 @@ rule annotateVariants:
 				--variantScoreThreshold {params.scoreThreshold} \
 				--variantCtrlScoreThreshold {params.ctrlThreshold} \
 				--cellTypeTable {params.cellTypeTable} \
-				--genes {params.geneLists}
+				--genes {params.geneLists}  
 				""")
 
 
