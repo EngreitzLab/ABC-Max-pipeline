@@ -8,14 +8,12 @@ configfile: "ABC-Max.config.json"
 from os.path import join
 
 # TODO: automatically create new directories for each trait+prediction set combo
-# TODO: change shrunkPredFile to predFile
 # TODO: move over the raw ABC output
 
 # Gathering all the outputs for all sets of predictions and variants
 outputSet = set()
-outdir = "/oak/stanford/groups/akundaje/kmualim/GWAS/" 
-if "ABC" in config["predictions"]:
-	outputSet.add(config["ABC"]["shrunkPredFile"][0])
+#if "ABC" in config["predictions"]:
+#	outputSet.add(config["ABC"]["shrunkPredFile"][0])
 
 wildcard_constraints:
 	traits = "|".join([x for x in config["traits"]]),
@@ -39,13 +37,14 @@ rule computeBackgroundOverlap:
 		allVariants = config["bgVariants"],
 		chrSizes = config["chrSizes"],
 		CDS = config["CDS"]
+	params:
+		cellType = lambda wildcard: config[wildcard.pred]["cellType"]
 	output:
 		overallOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"),
 		overallOverlapCounts = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"),
 		noncodingOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"),
 		outDir = directory(expand("{outdir}{{pred}}", outdir=config["outDir"]))
 	log: os.path.join(config["logDir"], "{pred}.bgoverlap.log")
-	params:
 	message: "Overlapping background variants with predictions: {wildcards.pred}"
 	run:
 		shell(
@@ -57,17 +56,27 @@ rule computeBackgroundOverlap:
 			# overall
 
 			# TODO: if cell type column is not provided, use all predictions, or require Celltype col?
-			
+		        # make output dir
+			if [ ! -d {output.outDir} ]
+			then
+				mkdir {output.outDir}
+			fi	
 			# Compute fraction of variants overlapping predictions in each cell type
 			# Finding the relevant columns
-			zcat {input.predFile} | csvtk cut -t -f chr,start,end,CellType | sed 1d | sort -k 1,1 -k 2,2n | uniq | bedtools sort -i stdin -faidx {input.chrSizes} | \
-			bedtools intersect -sorted -g {input.chrSizes} -a {input.allVariants} -b stdin -wa -wb | gzip > {output.overallOverlap};
+			if {params.cellType}
+			then
+				zcat {input.predFile} | csvtk cut -t -f chr,start,end,CellType | sed 1d | sort -k 1,1 -k 2,2n | uniq | bedtools sort -i stdin -faidx {input.chrSizes} | \
+				bedtools intersect -sorted -g {input.chrSizes} -a {input.allVariants} -b stdin -wa -wb | gzip > {output.overallOverlap};
+			else
+				zcat {input.predFile} | csvtk cut -t -f chr,start,end,CellType | sed 1d | sort -k 1,1 -k 2,2n | uniq | bedtools sort -i stdin -faidx {input.chrSizes} | \
+				bedtools intersect -sorted -g {input.chrSizes} -a {input.allVariants} -b stdin -wa -wb | gzip > {output.overallOverlap};
+			fi
 			
 			# Getting the cell type column and counting
-			zcat {output.overallOverlap} | cut -f 7 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.overallOverlapCounts};
+			 zcat {output.overallOverlap} | cut -f 7 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.overallOverlapCounts};
 
 			# Compute fraction of noncoding variants overlapping predictions in any cell type
-			zcat {output.overallOverlap} | bedtools intersect -v -a stdin -b {input.CDS} | cut -f 1-3,7 | sort | uniq | cut -f 4 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.noncodingOverlap}
+			 zcat {output.overallOverlap} | bedtools intersect -v -a stdin -b {input.CDS} | cut -f 1-3,7 | sort | uniq | cut -f 4 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.noncodingOverlap}
 			
 			""")
 
@@ -89,7 +98,11 @@ rule createVarFiles:
 		if "{params.varFilterCol}" is not None:
 			shell(
 				"""
-				
+				# make output dir 
+				if [ ! -d {params.outDir} ]
+                       		then
+                                	mkdir {params.outDir}
+                        	fi
 				# Subsetting the variant list based on significance
 				# Finding the score colum
 				#scoreCol=$(awk -v RS='\\t' '/{params.varFilterCol}/{{print NR; exit}}' {input.varList});
@@ -165,7 +178,10 @@ rule annotateVariants:
 		scoreType = lambda wildcard: config[wildcard.trait]["varScoreType"][0],
 		scoreThreshold = lambda wildcard: config[wildcard.trait]["varFilterThreshold"][0],
 		ctrlThreshold = lambda wildcard: config[wildcard.trait]["varCtrlThreshold"][0],
-		geneLists = lambda wildcard: config[wildcard.pred]["genes"]
+		geneLists = lambda wildcard: config[wildcard.pred]["genes"], 
+		cellType = lambda wildcard: config[wildcard.pred]["cellType"],
+		TargetGene = lambda wildcard: config[wildcard.pred]["TargetGene"],
+		isTargetGene = lambda wildcard: config[wildcard.pred]["TargetGeneTSS"]	
 	message: "Annotating {wildcards.trait} variants with {wildcards.pred} predictions"
 	run:
 		# If using ABC predictions, plotting some additional features
@@ -180,7 +196,10 @@ rule annotateVariants:
 				--credibleSets {input.csList} \
 				--codeDir {params.codeDir} \
 				--cellTypeTable {params.cellTypeTable} \
-				--genes {params.geneLists} 
+				--genes {params.geneLists} \
+				--cellType {params.cellType} \
+				--TargetGene {params.TargetGene} \
+				--TargetGeneTSS {params.isTargetGene}
 				""")
 		else:
 			shell(
@@ -198,7 +217,51 @@ rule annotateVariants:
 				--variantScoreThreshold {params.scoreThreshold} \
 				--variantCtrlScoreThreshold {params.ctrlThreshold} \
 				--cellTypeTable {params.cellTypeTable} \
-				--genes {params.geneLists}  
+				--genes {params.geneLists} \
+				--cellType {params.cellType} \
+                                --TargetGene {params.TargetGene} \
+                                --TargetGeneTSS {params.isTargetGene} 
 				""")
 
 
+rule runTraitEnrichment:
+	input: 
+		cellTypeEnrichments = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
+	output:
+		outfile = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf")
+	params:
+		cellTypeTable = lambda wildcard: config[wildcard.pred]["celltypeAnnotation"][0],
+		projectDir = config["projectDir"],
+		outDir = os.path.join(config["outDir"], "{pred}/{trait}/")
+		
+	message: "Running encirhment plots"
+	run: 
+		shell(
+			"""
+			Rscript {params.projectDir}/PlotCellTypeEnrichment.R \
+			--o {params.outDir} \
+			--cellTypes {params.cellTypeTable} \ 
+			--cellTypeEnrichments {input.cellTypeEnrichments} \
+			--codeDir {params.codeDir} \
+			--trait {wildcards.trait}
+			""")
+
+rule plotAggregate:
+	output:
+		outfile = os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf")
+	params:
+		predictorOfChoice = config["predictorOfChoice"],
+		predictors = config["predictions"],
+		outDir = config["outDir"]
+		
+	message: "Aggregating enrichment plots across predictors"
+	run:
+		shell(
+			"""
+			python {params.projectDir}/PlotAggregate.py \
+			--traits {wildcards.trait} \ 
+			--predictor_of_choice {params.predictorOfChoice} \
+			--data_outdir {params.outDir} \ 
+			--outdir {params.outDir} \
+			--predictors {params.predictors} 
+			""")
