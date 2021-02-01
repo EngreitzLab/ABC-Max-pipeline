@@ -251,6 +251,7 @@ computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type
 #  print(length(bg$n))
   hi.count$total <- length(hi.vars)
   hi.count$total.ctrl <- length(bg.vars$V4)
+  hi.count$Disease <- trait
   # What to use as prop.snps?
   hi.count$prop.snps <- with(hi.count, n/total)
   hi.count$enrichment <- with(hi.count, n/total / ( (n.ctrl)/total.ctrl ))
