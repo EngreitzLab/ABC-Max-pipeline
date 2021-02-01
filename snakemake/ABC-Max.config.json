@@ -60,7 +60,8 @@
         ], 
 	"cellType" : ["TRUE"],
 	"TargetGene" : ["TRUE"], 
-	"TargetGeneTSS" : ["TRUE"]
+	"TargetGeneTSS" : ["TRUE"],
+	"hasPromoter": ["TRUE"]
     },
   "BLUEPRINT_201217-ChromHMM": {
         "predFile": [
@@ -86,7 +87,8 @@
         ],
 	"cellType" : ["TRUE"],
 	"TargetGene" : ["FALSE"],
-	"TargetGeneTSS" : ["FALSE"]
+	"TargetGeneTSS" : ["FALSE"],
+	"hasPromoter": ["FALSE"]
 
     },
     "Granja2019": {
@@ -113,7 +115,8 @@
         ],
 	"cellType" : ["FALSE"],
 	"TargetGene" : ["FALSE"],
-	"TargetGeneTSS" : ["FALSE"]
+	"TargetGeneTSS" : ["FALSE"],
+	"hasPromoter": ["FALSE"]
     },
     "IBD": {
         "dir": "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/data/data/Test_data/Huang2017-IBD/CredibleSets/",

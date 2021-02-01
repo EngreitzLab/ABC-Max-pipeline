@@ -7,16 +7,17 @@ suppressPackageStartupMessages(library("optparse"))
 suppressPackageStartupMessages(library("RColorBrewer"))
 
 ## To do -- make this more customizable
-option.list <- list(
-  make_option(c("-o", "--outdir"), type="character", help="Output directory"),
-  make_option("--cellTypes", type="character", help="Cell type annotation file", default="Test_data/CellTypes.Annotated.ABCPaper.txt"),
-  make_option("--cellTypeEnrichments", type="character", default="plots/CellTypeEnrichment.tsv", help="File containing merged cell type enrichments across traits"),
-  make_option("--codeDir", type="character", default="ABC-Max-pipeline/"),
-  make_option("--trait", type="character", default="trait_name"))
+option_list <- list(
+		    make_option(c("--outdir"), type="character", default="test", help="Output directory"),
+		    make_option(c("--cellTypes"), type="character", default="Test_data/CellTypes.Annotated.ABCPaper.txt", help="Cell type annotation file"),
+	    	    make_option(c("--cellTypeEnrichments"), type="character", default="plots/CellTypeEnrichment.tsv", help= "File containing merged cell type enrichments across traits"),
+  		    make_option(c("--codeDir"), type="character", default="ABC-Max-pipeline/", help="code directory"),
+		    make_option(c("--trait"), type="character", default="IBD", help="trait name"),
+		    make_option(c("--noPromoter"), type="character", default="FALSE", help="if data is filtered for Promoters")
+		    )
 
-opt <- parse_args(OptionParser(option_list=option.list))
-dput(opt)
-
+opt <- parse_args(OptionParser(option_list=option_list))
+#dput(opt)
 
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(tidyr))
@@ -52,11 +53,19 @@ mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 45, vjust 
   ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(cell.type.annot.all[order(cell.type.annot.all$Categorical.IBDTissueAnnotations2),"CellType"]))
 
   formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=brewer.pal(n = 8, name = "Dark2")[-5]) + ylab(paste0("Enrichment\n( ", opt$trait, " variants / all variants)"))
-  pdf(file=paste0(opt$outdir, "/CellTypeEnrichment.", opt$trait, ".pdf"), width=5, height=4)
+  if (opt$noPromoter==TRUE){
+	pdf(file=paste0(opt$outdir, "/CellTypeEnrichment.noPromoter", opt$trait, ".pdf"), width=5, height=4)
+  } else {
+  	pdf(file=paste0(opt$outdir, "/CellTypeEnrichment.", opt$trait, ".pdf"), width=5, height=4)
+  }
   p1 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment, color=CellCat)) + ggtitle("ABC Enhancers") 
   p1 <- p1 %>% formatEnrichmentBarPlot()
   print(p1)
-  ggsave(paste0(opt$outdir, "/CellTypeEnrichment.", opt$trait, ".eps"), width=5, height=4)
+  if (opt$noPromoter==TRUE){
+  	ggsave(paste0(opt$outdir, "/CellTypeEnrichment.noPromoter", opt$trait, ".eps"), width=5, height=4)
+  } else {
+  	ggsave(paste0(opt$outdir, "/CellTypeEnrichment.", opt$trait, ".eps"), width=5, height=4)
+  }
   dev.off()
 }
 

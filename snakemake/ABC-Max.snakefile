@@ -9,21 +9,21 @@ from os.path import join
 
 # Gathering all the outputs for all sets of predictions and variants
 outputSet = set()
-if "ABC" in config["predictions"]:
-	outputSet.add(config["ABC"]["shrunkPredFile"][0])
+#if "ABC" in config["predictions"]:
+#	outputSet.add(config["ABC"]["shrunkPredFile"][0])
 
 rule all:
 	input:
 		outputSet,
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
-		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"])
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
+#		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"])
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
+#		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
 
 rule computeBackgroundOverlap:
 	input:
@@ -89,7 +89,7 @@ rule createVarFiles:
 		chrSizes = config["chrSizes"]
 	message: "Creating variant BED files"
 	run:
-		if "{params.varFilterCol}" is not None:
+		if {params.varFilterCol} is not None:
 			shell(
 				"""
 				# make output dir 
@@ -227,10 +227,12 @@ rule runTraitEnrichment:
 		cellTypeTable = lambda wildcard: config[wildcard.pred]["celltypeAnnotation"][0],
 		projectDir = config["projectDir"],
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
-	 	isCellType = lambda wildcard: config[wildcard.pred]["cellType"][0]	
+		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.noPromoter.{trait}.tsv"),
+	 	isCellType = lambda wildcard: config[wildcard.pred]["cellType"][0], 
+		hasPromoterColumn = lambda wildcard: config[wildcard.pred]["hasPromoter"][0]	
 	message: "Running enrichment plots"
 	run:
-		if {params.isCellType}=="TRUE":
+		if {params.isCellType}=={"TRUE"} and {params.hasPromoterColumn}=={"TRUE"}:
 			shell(
 				"""
 				Rscript {params.projectDir}PlotCellTypeEnrichment.R \
@@ -239,6 +241,24 @@ rule runTraitEnrichment:
 				--cellTypeEnrichments {input.cellTypeEnrichments} \
 				--codeDir {params.projectDir} \
 				--trait {wildcards.trait} 
+				
+                               	Rscript {params.projectDir}PlotCellTypeEnrichment.R \
+                               	--outdir {params.outDir} \
+                               	--cellTypes {params.cellTypeTable} \
+                               	--cellTypeEnrichments {params.cellTypeEnrichments_noPromoter} \
+                               	--codeDir {params.projectDir} \
+                               	--trait {wildcards.trait} \
+				--noPromoter TRUE 
+                               	""")
+		elif {params.isCellType}=={"TRUE"}:
+			shell(
+				"""
+				Rscript {params.projectDir}PlotCellTypeEnrichment.R \
+				--outdir {params.outDir} \
+                                --cellTypes {params.cellTypeTable} \
+                                --cellTypeEnrichments {input.cellTypeEnrichments} \
+                                --codeDir {params.projectDir} \
+                                --trait {wildcards.trait} \
 				""")
 		else:
 			shell(
