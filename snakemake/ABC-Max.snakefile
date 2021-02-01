@@ -7,17 +7,10 @@
 
 from os.path import join
 
-# TODO: automatically create new directories for each trait+prediction set combo
-# TODO: move over the raw ABC output
-
 # Gathering all the outputs for all sets of predictions and variants
 outputSet = set()
 #if "ABC" in config["predictions"]:
 #	outputSet.add(config["ABC"]["shrunkPredFile"][0])
-
-wildcard_constraints:
-	traits = "|".join([x for x in config["traits"]]),
-	pred = "|".join([x for x in config["predictions"]])
 
 rule all:
 	input:
@@ -29,7 +22,8 @@ rule all:
 		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"])
-
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
 
 rule computeBackgroundOverlap:
 	input:
@@ -95,7 +89,7 @@ rule createVarFiles:
 		chrSizes = config["chrSizes"]
 	message: "Creating variant BED files"
 	run:
-		if "{params.varFilterCol}" is not None:
+		if {params.varFilterCol} is not None:
 			shell(
 				"""
 				# make output dir 
@@ -223,7 +217,7 @@ rule annotateVariants:
                                 --TargetGeneTSS {params.isTargetGene} 
 				""")
 
-
+# Added in functionality for data filtered for promoters BUT this is only available for predictions (like ABC) that are have promoters included 
 rule runTraitEnrichment:
 	input: 
 		cellTypeEnrichments = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
@@ -232,36 +226,64 @@ rule runTraitEnrichment:
 	params:
 		cellTypeTable = lambda wildcard: config[wildcard.pred]["celltypeAnnotation"][0],
 		projectDir = config["projectDir"],
-		outDir = os.path.join(config["outDir"], "{pred}/{trait}/")
-		
-	message: "Running encirhment plots"
-	run: 
-		shell(
-			"""
-			Rscript {params.projectDir}/PlotCellTypeEnrichment.R \
-			--o {params.outDir} \
-			--cellTypes {params.cellTypeTable} \ 
-			--cellTypeEnrichments {input.cellTypeEnrichments} \
-			--codeDir {params.codeDir} \
-			--trait {wildcards.trait}
-			""")
+		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
+		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.noPromoter.{trait}.tsv"),
+	 	isCellType = lambda wildcard: config[wildcard.pred]["cellType"][0], 
+		hasPromoterColumn = lambda wildcard: config[wildcard.pred]["hasPromoter"][0]	
+	message: "Running enrichment plots"
+	run:
+		if {params.isCellType}=={"TRUE"} and {params.hasPromoterColumn}=={"TRUE"}:
+			shell(
+				"""
+				Rscript {params.projectDir}PlotCellTypeEnrichment.R \
+				--outdir {params.outDir} \
+				--cellTypes {params.cellTypeTable} \
+				--cellTypeEnrichments {input.cellTypeEnrichments} \
+				--codeDir {params.projectDir} \
+				--trait {wildcards.trait} 
+				
+                               	Rscript {params.projectDir}PlotCellTypeEnrichment.R \
+                               	--outdir {params.outDir} \
+                               	--cellTypes {params.cellTypeTable} \
+                               	--cellTypeEnrichments {params.cellTypeEnrichments_noPromoter} \
+                               	--codeDir {params.projectDir} \
+                               	--trait {wildcards.trait} \
+				--noPromoter TRUE 
+                               	""")
+		elif {params.isCellType}=={"TRUE"}:
+			shell(
+				"""
+				Rscript {params.projectDir}PlotCellTypeEnrichment.R \
+				--outdir {params.outDir} \
+                                --cellTypes {params.cellTypeTable} \
+                                --cellTypeEnrichments {input.cellTypeEnrichments} \
+                                --codeDir {params.projectDir} \
+                                --trait {wildcards.trait} \
+				""")
+		else:
+			shell(
+				"""
+				touch {output.outfile}
+				""")
 
+# TODO: Should we also create aggregate plots for both data that contains promoters and data with filtered out promoters 
 rule plotAggregate:
 	output:
 		outfile = os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf")
 	params:
 		predictorOfChoice = config["predictorOfChoice"],
 		predictors = config["predictions"],
+		projectDir = config["projectDir"],
 		outDir = config["outDir"]
 		
 	message: "Aggregating enrichment plots across predictors"
 	run:
 		shell(
 			"""
-			python {params.projectDir}/PlotAggregate.py \
-			--traits {wildcards.trait} \ 
+			python {params.projectDir}plot_aggregate.py \
+			--traits {wildcards.trait} \
 			--predictor_of_choice {params.predictorOfChoice} \
-			--data_outdir {params.outDir} \ 
+			--data_outdir {params.outDir} \
 			--outdir {params.outDir} \
-			--predictors {params.predictors} 
+			--predictors {params.predictors}
 			""")
