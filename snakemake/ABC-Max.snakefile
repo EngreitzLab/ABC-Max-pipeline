@@ -7,17 +7,10 @@ configfile: "ABC-Max.config.json"
 
 from os.path import join
 
-# TODO: automatically create new directories for each trait+prediction set combo
-# TODO: move over the raw ABC output
-
 # Gathering all the outputs for all sets of predictions and variants
 outputSet = set()
-#if "ABC" in config["predictions"]:
-#	outputSet.add(config["ABC"]["shrunkPredFile"][0])
-
-wildcard_constraints:
-	traits = "|".join([x for x in config["traits"]]),
-	pred = "|".join([x for x in config["predictions"]])
+if "ABC" in config["predictions"]:
+	outputSet.add(config["ABC"]["shrunkPredFile"][0])
 
 rule all:
 	input:
@@ -29,7 +22,8 @@ rule all:
 		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"])
-
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
 
 rule computeBackgroundOverlap:
 	input:
@@ -232,19 +226,25 @@ rule runTraitEnrichment:
 	params:
 		cellTypeTable = lambda wildcard: config[wildcard.pred]["celltypeAnnotation"][0],
 		projectDir = config["projectDir"],
-		outDir = os.path.join(config["outDir"], "{pred}/{trait}/")
-		
-	message: "Running encirhment plots"
-	run: 
-		shell(
-			"""
-			Rscript {params.projectDir}/PlotCellTypeEnrichment.R \
-			--o {params.outDir} \
-			--cellTypes {params.cellTypeTable} \ 
-			--cellTypeEnrichments {input.cellTypeEnrichments} \
-			--codeDir {params.codeDir} \
-			--trait {wildcards.trait}
-			""")
+		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
+	 	isCellType = lambda wildcard: config[wildcard.pred]["cellType"][0]	
+	message: "Running enrichment plots"
+	run:
+		if {params.isCellType}=="TRUE":
+			shell(
+				"""
+				Rscript {params.projectDir}PlotCellTypeEnrichment.R \
+				--outdir {params.outDir} \
+				--cellTypes {params.cellTypeTable} \
+				--cellTypeEnrichments {input.cellTypeEnrichments} \
+				--codeDir {params.projectDir} \
+				--trait {wildcards.trait} 
+				""")
+		else:
+			shell(
+				"""
+				touch {output.outfile}
+				""")
 
 rule plotAggregate:
 	output:
@@ -252,16 +252,17 @@ rule plotAggregate:
 	params:
 		predictorOfChoice = config["predictorOfChoice"],
 		predictors = config["predictions"],
+		projectDir = config["projectDir"],
 		outDir = config["outDir"]
 		
 	message: "Aggregating enrichment plots across predictors"
 	run:
 		shell(
 			"""
-			python {params.projectDir}/PlotAggregate.py \
-			--traits {wildcards.trait} \ 
+			python {params.projectDir}plot_aggregate.py \
+			--traits {wildcards.trait} \
 			--predictor_of_choice {params.predictorOfChoice} \
-			--data_outdir {params.outDir} \ 
+			--data_outdir {params.outDir} \
 			--outdir {params.outDir} \
-			--predictors {params.predictors} 
+			--predictors {params.predictors}
 			""")
