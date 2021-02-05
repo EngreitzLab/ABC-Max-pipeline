@@ -9,21 +9,21 @@ from os.path import join
 
 # Gathering all the outputs for all sets of predictions and variants
 outputSet = set()
-if "ABC" in config["predictions"]:
-	outputSet.add(config["ABC"]["shrunkPredFile"][0])
+#if "ABC" in config["predictions"]:
+#	outputSet.add(config["ABC"]["shrunkPredFile"][0])
 
 rule all:
 	input:
 		outputSet,
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
-		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
+#		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
+#		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
 
 rule computeBackgroundOverlap:
 	input:
@@ -158,6 +158,7 @@ rule annotateVariants:
 		varList = lambda wildcard: config[wildcard.trait]["varList"],
 		csList = lambda wildcard: config[wildcard.trait]["csList"],
 		predOverlapFile = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"]),
+		bgOverlap = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.tsv.gz", outdir=config["outDir"]),
 		bgVars = config["bgVariants"] 
 	output:
 		touch(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt")),
@@ -172,7 +173,14 @@ rule annotateVariants:
 		scoreType = lambda wildcard: config[wildcard.trait]["varScoreType"][0],
 		scoreThreshold = lambda wildcard: config[wildcard.trait]["varFilterThreshold"][0],
 		ctrlThreshold = lambda wildcard: config[wildcard.trait]["varCtrlThreshold"][0],
-		geneLists = lambda wildcard: config[wildcard.pred]["genes"], 
+		gex = config["gex"],
+		promoterActivityRef = config["promoterActivityRef"],
+		cellTypeCov = config["cellTypeCov"],
+		specificityBackground = config["specificityBackground"],
+		housekeepingList = config["housekeepingList"],
+		predColMap = config["predColMap"],
+		geneLists = lambda wildcard: config[wildcard.pred]["genes"],
+		genesUniq = lambda wildcard: config[wildcard.pred]["genesUniq"],
 		cellType = lambda wildcard: config[wildcard.pred]["cellType"],
 		TargetGene = lambda wildcard: config[wildcard.pred]["TargetGene"],
 		isTargetGene = lambda wildcard: config[wildcard.pred]["TargetGeneTSS"]	
@@ -185,12 +193,21 @@ rule annotateVariants:
 				Rscript {params.projectDir}/AnnotateCredibleSets.R \
 				--variants {input.varList} \
 				--predictionFile {input.predOverlapFile} \
+				--backgroundVariants {input.bgVars} \
+				--bgOverlap {input.bgOverlap} \
 				--outbase {params.outDir} \
 				--trait {wildcards.trait} \
 				--credibleSets {input.csList} \
 				--codeDir {params.codeDir} \
 				--cellTypeTable {params.cellTypeTable} \
+				--gex {params.gex} \
+				--promoterActivityRef {params.promoterActivityRef} \
+				--cellTypeCov {params.cellTypeCov} \
+				--specificityBackground {params.specificityBackground} \
+				--housekeepingList {params.housekeepingList} \
+				--predColMap {params.predColMap} \
 				--genes {params.geneLists} \
+				--genesUniq {params.genesUniq} \
 				--cellType {params.cellType} \
 				--TargetGene {params.TargetGene} \
 				--TargetGeneTSS {params.isTargetGene}
@@ -201,6 +218,8 @@ rule annotateVariants:
 				Rscript {params.projectDir}/AnnotateCredibleSets.R \
 				--variants {input.varList} \
 				--predictionFile {input.predOverlapFile} \
+				--backgroundVariants {input.bgVars} \
+                                --bgOverlap {input.bgOverlap} \
 				--isABC FALSE \
 				--outbase {params.outDir} \
 				--trait {wildcards.trait} \
@@ -211,7 +230,14 @@ rule annotateVariants:
 				--variantScoreThreshold {params.scoreThreshold} \
 				--variantCtrlScoreThreshold {params.ctrlThreshold} \
 				--cellTypeTable {params.cellTypeTable} \
+				--gex {params.gex} \
+                                --promoterActivityRef {params.promoterActivityRef} \
+                                --cellTypeCov {params.cellTypeCov} \
+                                --specificityBackground {params.specificityBackground} \
+                                --housekeepingList {params.housekeepingList} \
+                                --predColMap {params.predColMap} \
 				--genes {params.geneLists} \
+				--genesUniq {params.genesUniq} \
 				--cellType {params.cellType} \
                                 --TargetGene {params.TargetGene} \
                                 --TargetGeneTSS {params.isTargetGene} 
