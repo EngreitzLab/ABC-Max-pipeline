@@ -685,10 +685,10 @@ getGenePrioritizationTable <- function(
                                     print(paste0("No nearby genes found for ",cs.name))
                                     return(NULL)
                                   }
-                                  
+
                                   mat <- matrix(0, nrow=length(curr.genes), ncol=length(cell.types), dimnames=list(row=curr.genes, col=cell.types))
                                   mat.contact <- matrix(0, nrow=length(curr.genes), ncol=length(cell.types), dimnames=list(row=curr.genes, col=cell.types))
-                                  for (i in with(all.clean, which(CredibleSet == cs.name & PosteriorProb  >= 0.1 & as.character(as.matrix(TargetGene)) %in% curr.genes))) {
+                                  for (i in with(all.clean, which(CredibleSet == cs.name & get(score.col) >= min.score & as.character(as.matrix(TargetGene)) %in% curr.genes))) {
                                     #if (! (all.clean$TargetGene[i] %in% rownames(mat))) print(all.clean$TargetGene[i])
                                     #if (! (all.clean$CellType[i] %in% colnames(mat))) print(all.clean$CellType[i])
                                     tryCatch({

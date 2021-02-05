@@ -3,7 +3,8 @@
 # This snakefile contains the rules for conducting the ABC-Max analysis as in
 # [citation].
 
-configfile: "ABC-Max.config.json"
+# configfile: "ABC-Max.config.json"  ## Specify this on the command line
+
 from os.path import join
 
 # Gathering all the outputs for all sets of predictions and variants
