@@ -122,8 +122,8 @@ getVariantByCellsTable <- function(overlap, score.col="PosteriorProb", isTargetG
 		  variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
 	  } else if (isTargetGene==TRUE) {
 		  variant.by.cells <- overlap %>% group_by(QueryRegionName) %>% summarise( n.genes=n(), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()}
-  return(variant.by.cells)
-}
+	}
+	return(variant.by.cells)
 }
 
 # Changed ABC.Score to ABC.score
