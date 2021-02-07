@@ -25,8 +25,8 @@ rule all:
 #		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
 #		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 #		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-#		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"])
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"])
+#		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"]),
 #		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
 #		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
 
@@ -192,7 +192,7 @@ rule annotateVariants:
                 isTargetGene = lambda wildcard: preds_config_file.loc[wildcard.pred,"TargetGeneTSS"]
 	message: "Annotating {wildcards.trait} variants with {wildcards.pred} predictions"
 	run:
-		
+		print({params.housekeepingList})	
 		#if using ABC predictions, plotting some additional features
                 if any(s.startswith('ABC') for s in list({wildcards.pred})):
                         shell(
@@ -219,7 +219,7 @@ rule annotateVariants:
                                 --TargetGene {params.TargetGene} \
                                 --TargetGeneTSS {params.isTargetGene}
                                 """)
-                else:
+		else:
                         shell(
                                 """
                                 Rscript {params.projectDir}/AnnotateCredibleSets.R \
@@ -245,7 +245,7 @@ rule annotateVariants:
                                 --genesUniq {params.genesUniq} \
                                 --cellType {params.cellType} \
                                 --TargetGene {params.TargetGene} \
-                                --TargetGeneTSS {params.isTargetGene}
+                                --TargetGeneTSS {params.isTargetGene} \
                                 --housekeepingList {params.housekeepingList} \
                                 --predColMap {params.predColMap} 
 				""")	

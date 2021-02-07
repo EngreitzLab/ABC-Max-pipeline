@@ -71,7 +71,10 @@ saveProgress()
 
 ##############################################################################
 ## Load common data
-
+# convert all boolean to caps strings
+opt$cellType <- toupper(opt$cellType)
+opt$TargetGene <- toupper(opt$TargetGene)
+opt$TargetGeneTSS <- toupper(opt$TargetGeneTSS)
 
 # All genes
 genes <- readBed(opt$genes)

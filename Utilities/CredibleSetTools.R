@@ -113,8 +113,6 @@ loadOneGeneList <- function(file) {
 # Changed ABC.Score to ABC.score, is this correct?
 # TODO: use column name based on selection
 getVariantByCellsTable <- function(overlap, score.col="PosteriorProb", isTargetGene=TRUE, isCellType=TRUE) {
-   	print(isTargetGene=="TRUE")
-	print(isCellType=="TRUE")
     if ((isCellType=="TRUE")&(isTargetGene=="TRUE")) {
   	variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), max.ABC=max(ABC.Score), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
 	return(variant.by.cells)
