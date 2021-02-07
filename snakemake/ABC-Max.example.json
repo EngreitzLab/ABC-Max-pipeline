@@ -23,7 +23,9 @@
     "gex" : "/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/GeneTSSActivityQuantile.tsv",
     "specificityBackground":"/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/allSpecificityScores.SparseMatrix.rds",
     "predictions": [
-       "ABC"
+       "ABC",
+       "BLUEPRINT_201217-ChromHMM",
+       "Granja2019"
     ],
     "traits": [
         "IBD"

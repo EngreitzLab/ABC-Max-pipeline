@@ -113,14 +113,17 @@ loadOneGeneList <- function(file) {
 # Changed ABC.Score to ABC.score, is this correct?
 # TODO: use column name based on selection
 getVariantByCellsTable <- function(overlap, score.col="PosteriorProb", isTargetGene=TRUE, isCellType=TRUE) {
-   if ((isCellType==TRUE)&(isTargetGene==TRUE)) {
+   	print(isTargetGene=="TRUE")
+	print(isCellType=="TRUE")
+    if ((isCellType=="TRUE")&(isTargetGene=="TRUE")) {
   	variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), max.ABC=max(ABC.Score), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
+	return(variant.by.cells)
   } else {
-	  if ((isTargetGene==FALSE)&(isCellType==FALSE)) {
+	  if ((isTargetGene=="FALSE")&(isCellType=="FALSE")) {
   		variant.by.cells <- overlap %>% group_by(QueryRegionName) %>% summarise( n.genes=n(), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
-	  } else if (isCellType==TRUE) {
+	  } else if (isCellType=="TRUE") {
 		  variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
-	  } else if (isTargetGene==TRUE) {
+	  } else if (isTargetGene=="TRUE") {
 		  variant.by.cells <- overlap %>% group_by(QueryRegionName) %>% summarise( n.genes=n(), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()}
 	}
 	return(variant.by.cells)
