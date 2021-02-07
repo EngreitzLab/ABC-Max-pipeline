@@ -4,5 +4,5 @@ OUTDIR=$1
 conda env create -f abc-max.yml
 
 # replace directories with own directories 
-sed -e s+/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/+$OUTDIR+ ABC-Max.config.json > ABC-Max.config1.json
+sed -i s+/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/+$OUTDIR+ ABC-Max.example.json 
 

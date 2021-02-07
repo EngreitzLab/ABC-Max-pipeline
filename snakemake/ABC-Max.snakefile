@@ -1,38 +1,44 @@
 # coding: utf-8
+from os.path import join
+import pandas as pd
 
 # This snakefile contains the rules for conducting the ABC-Max analysis as in
 # [citation].
 
-# configfile: "ABC-Max.config.json"  ## Specify this on the command line
+#configfile: "ABC-Max.config.json"  ## Specify this on the command line
 
-from os.path import join
+pred_config = "ABC-Max.config-preds.tsv"
+trait_config = "ABC-Max.config-traits.tsv"
+
+preds_config_file = pd.read_table(pred_config).set_index("entry", drop=False)
+trait_config_file = pd.read_table(trait_config).set_index("entry", drop=False)
+trait_config_file.head()
 
 # Gathering all the outputs for all sets of predictions and variants
 outputSet = set()
-#if "ABC" in config["predictions"]:
-#	outputSet.add(config["ABC"]["shrunkPredFile"][0])
 
 rule all:
 	input:
-		outputSet,
+#		outputSet,
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"]),
-#		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
-#		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
+		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"])
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"])
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
+
 
 rule computeBackgroundOverlap:
 	input:
-		predFile = lambda wildcard: config[wildcard.pred]["predFile"][0],
+		predFile = lambda wildcard: preds_config_file.loc[wildcard.pred, "predFile"],
 		allVariants = config["bgVariants"],
 		chrSizes = config["chrSizes"],
 		CDS = config["CDS"]
 	params:
-		cellType = lambda wildcard: config[wildcard.pred]["cellType"]
+		cellType = lambda wildcard: preds_config_file.loc[wildcard.pred, "cellType"]
 	output:
 		overallOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"),
 		overallOverlapCounts = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"),
@@ -76,15 +82,15 @@ rule computeBackgroundOverlap:
 
 rule createVarFiles:
 	input:
-		varList = lambda wildcard: config[wildcard.trait]["varList"]
+		varList = lambda wildcard: trait_config_file.loc[wildcard.trait, "varList"]
 	output:
 		varBed = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bed", outdir=config["outDir"]),
 		varBedgraph = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bedgraph", outdir=config["outDir"]),
 		sigvarList = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.sig.varList.tsv", outdir=config["outDir"])
 	log: os.path.join(config["logDir"], "{trait}.{pred}.createbed.log")
 	params:
-		varFilterCol = lambda wildcard: config[wildcard.trait]["varFilterCol"][0],
-		varFilterThreshold = lambda wildcard: config[wildcard.trait]["varFilterThreshold"][0],
+		varFilterCol = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterCol"],
+		varFilterThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterThreshold"],
 		outDir = directory(expand("{outdir}{{pred}}/{{trait}}/", outdir=config["outDir"])),
 		chrSizes = config["chrSizes"]
 	message: "Creating variant BED files"
@@ -128,8 +134,8 @@ rule createVarFiles:
 
 rule overlapVariants:
 	input:
-		predFile = lambda wildcard: config[wildcard.pred]["predFile"][0],
-		varList = lambda wildcard: config[wildcard.trait]["varList"],
+		predFile = lambda wildcard: preds_config_file.loc[wildcard.pred, "predFile"],
+		varList = lambda wildcard: trait_config_file.loc[wildcard.trait, "varList"],
 		varBed = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bed", outdir=config["outDir"]),
 		varBedgraph = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bedgraph", outdir=config["outDir"])
 	output:
@@ -154,95 +160,95 @@ rule overlapVariants:
 
 rule annotateVariants:
 	input:
-		predFile = lambda wildcard: config[wildcard.pred]["predFile"][0],
-		varList = lambda wildcard: config[wildcard.trait]["varList"],
-		csList = lambda wildcard: config[wildcard.trait]["csList"],
+		predFile = lambda wildcard: preds_config_file.loc[wildcard.pred, "predFile"],
+		varList = lambda wildcard: trait_config_file.loc[wildcard.trait, "varList"],
+		csList = lambda wildcard: trait_config_file.loc[wildcard.trait, "csList"],
 		predOverlapFile = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"]),
-		bgOverlap = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.tsv.gz", outdir=config["outDir"]),
-		bgVars = config["bgVariants"] 
+		bgVars = config["bgVariants"],
+		bgOverlap = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.tsv.gz", outdir=config["outDir"]) 
 	output:
 		touch(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt")),
 		enrichFile = expand("{outdir}{{pred}}/{{trait}}/enrichment/Enrichment.CellType.vsScore.{{trait}}.tsv", outdir=config["outDir"])
 	log: os.path.join(config["logDir"], "{trait}.{pred}.annotate.log")
 	params:
-		cellTypeTable = lambda wildcard: config[wildcard.pred]["celltypeAnnotation"][0],
-		codeDir = config["codeDir"],
-		projectDir = config["projectDir"],
-		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
-		scoreCol = lambda wildcard: config[wildcard.trait]["varFilterCol"][0],
-		scoreType = lambda wildcard: config[wildcard.trait]["varScoreType"][0],
-		scoreThreshold = lambda wildcard: config[wildcard.trait]["varFilterThreshold"][0],
-		ctrlThreshold = lambda wildcard: config[wildcard.trait]["varCtrlThreshold"][0],
-		gex = config["gex"],
-		promoterActivityRef = config["promoterActivityRef"],
-		cellTypeCov = config["cellTypeCov"],
-		specificityBackground = config["specificityBackground"],
-		housekeepingList = config["housekeepingList"],
-		predColMap = config["predColMap"],
-		geneLists = lambda wildcard: config[wildcard.pred]["genes"],
-		genesUniq = lambda wildcard: config[wildcard.pred]["genesUniq"],
-		cellType = lambda wildcard: config[wildcard.pred]["cellType"],
-		TargetGene = lambda wildcard: config[wildcard.pred]["TargetGene"],
-		isTargetGene = lambda wildcard: config[wildcard.pred]["TargetGeneTSS"]	
+                cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred,"celltypeAnnotation"],
+                codeDir = config["codeDir"],
+                projectDir = config["projectDir"],
+                outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
+                scoreCol = lambda wildcard: trait_config_file.loc[wildcard.trait,"varFilterCol"],
+                scoreType = lambda wildcard: trait_config_file.loc[wildcard.trait,"varScoreType"],
+                scoreThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait,"varFilterThreshold"],
+                ctrlThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait,"varCtrlThreshold"],
+                gex = config["gex"],
+                promoterActivityRef = config["promoterActivityRef"],
+                cellTypeCov = config["cellTypeCov"],
+                specificityBackground = config["specificityBackground"],
+                housekeepingList = config["housekeepingList"],
+                predColMap = config["predColMap"],
+                geneLists = lambda wildcard:preds_config_file.loc[wildcard.pred,"genes"],
+                genesUniq = lambda wildcard: preds_config_file.loc[wildcard.pred,"genesUniq"],
+                cellType = lambda wildcard: preds_config_file.loc[wildcard.pred,"cellType"],
+                TargetGene = lambda wildcard: preds_config_file.loc[wildcard.pred,"TargetGene"],
+                isTargetGene = lambda wildcard: preds_config_file.loc[wildcard.pred,"TargetGeneTSS"]
 	message: "Annotating {wildcards.trait} variants with {wildcards.pred} predictions"
 	run:
-		# If using ABC predictions, plotting some additional features
-		if any(s.startswith('ABC') for s in list({wildcards.pred})):
-			shell(
-				"""
-				Rscript {params.projectDir}/AnnotateCredibleSets.R \
-				--variants {input.varList} \
-				--predictionFile {input.predOverlapFile} \
-				--backgroundVariants {input.bgVars} \
-				--bgOverlap {input.bgOverlap} \
-				--outbase {params.outDir} \
-				--trait {wildcards.trait} \
-				--credibleSets {input.csList} \
-				--codeDir {params.codeDir} \
-				--cellTypeTable {params.cellTypeTable} \
-				--gex {params.gex} \
-				--promoterActivityRef {params.promoterActivityRef} \
-				--cellTypeCov {params.cellTypeCov} \
-				--specificityBackground {params.specificityBackground} \
-				--housekeepingList {params.housekeepingList} \
-				--predColMap {params.predColMap} \
-				--genes {params.geneLists} \
-				--genesUniq {params.genesUniq} \
-				--cellType {params.cellType} \
-				--TargetGene {params.TargetGene} \
-				--TargetGeneTSS {params.isTargetGene}
-				""")
-		else:
-			shell(
-				"""
-				Rscript {params.projectDir}/AnnotateCredibleSets.R \
-				--variants {input.varList} \
-				--predictionFile {input.predOverlapFile} \
-				--backgroundVariants {input.bgVars} \
+		
+		#if using ABC predictions, plotting some additional features
+                if any(s.startswith('ABC') for s in list({wildcards.pred})):
+                        shell(
+                                """
+                                Rscript {params.projectDir}/AnnotateCredibleSets.R \
+                                --variants {input.varList} \
+                                --predictionFile {input.predOverlapFile} \
+                                --backgroundVariants {input.bgVars} \
                                 --bgOverlap {input.bgOverlap} \
-				--isABC FALSE \
-				--outbase {params.outDir} \
-				--trait {wildcards.trait} \
-				--credibleSets {input.csList} \
-				--codeDir {params.codeDir} \
-				--variantScoreCol {params.scoreCol} \
-				--scoreType {params.scoreType} \
-				--variantScoreThreshold {params.scoreThreshold} \
-				--variantCtrlScoreThreshold {params.ctrlThreshold} \
-				--cellTypeTable {params.cellTypeTable} \
-				--gex {params.gex} \
+                                --outbase {params.outDir} \
+                                --trait {wildcards.trait} \
+                                --credibleSets {input.csList} \
+                                --codeDir {params.codeDir} \
+                                --cellTypeTable {params.cellTypeTable} \
+                                --gex {params.gex} \
                                 --promoterActivityRef {params.promoterActivityRef} \
                                 --cellTypeCov {params.cellTypeCov} \
                                 --specificityBackground {params.specificityBackground} \
                                 --housekeepingList {params.housekeepingList} \
                                 --predColMap {params.predColMap} \
-				--genes {params.geneLists} \
-				--genesUniq {params.genesUniq} \
-				--cellType {params.cellType} \
+                                --genes {params.geneLists} \
+                                --genesUniq {params.genesUniq} \
+                                --cellType {params.cellType} \
                                 --TargetGene {params.TargetGene} \
-                                --TargetGeneTSS {params.isTargetGene} 
-				""")
-
+                                --TargetGeneTSS {params.isTargetGene}
+                                """)
+                else:
+                        shell(
+                                """
+                                Rscript {params.projectDir}/AnnotateCredibleSets.R \
+                                --variants {input.varList} \
+                                --predictionFile {input.predOverlapFile} \
+                                --backgroundVariants {input.bgVars} \
+                                --bgOverlap {input.bgOverlap} \
+                                --isABC FALSE \
+                                --outbase {params.outDir} \
+                                --trait {wildcards.trait} \
+                                --credibleSets {input.csList} \
+                                --codeDir {params.codeDir} \
+                                --variantScoreCol {params.scoreCol} \
+                                --scoreType {params.scoreType} \
+                                --variantScoreThreshold {params.scoreThreshold} \
+                                --variantCtrlScoreThreshold {params.ctrlThreshold} \
+                                --cellTypeTable {params.cellTypeTable} \
+                                --gex {params.gex} \
+                                --promoterActivityRef {params.promoterActivityRef} \
+                                --cellTypeCov {params.cellTypeCov} \
+                                --specificityBackground {params.specificityBackground} \
+                                --genes {params.geneLists} \
+                                --genesUniq {params.genesUniq} \
+                                --cellType {params.cellType} \
+                                --TargetGene {params.TargetGene} \
+                                --TargetGeneTSS {params.isTargetGene}
+                                --housekeepingList {params.housekeepingList} \
+                                --predColMap {params.predColMap} 
+				""")	
 # Added in functionality for data filtered for promoters BUT this is only available for predictions (like ABC) that are have promoters included 
 rule runTraitEnrichment:
 	input: 
@@ -250,12 +256,12 @@ rule runTraitEnrichment:
 	output:
 		outfile = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf")
 	params:
-		cellTypeTable = lambda wildcard: config[wildcard.pred]["celltypeAnnotation"][0],
+		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
 		projectDir = config["projectDir"],
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
 		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.noPromoter.{trait}.tsv"),
-	 	isCellType = lambda wildcard: config[wildcard.pred]["cellType"][0], 
-		hasPromoterColumn = lambda wildcard: config[wildcard.pred]["hasPromoter"][0]	
+	 	isCellType = lambda wildcard: preds_config_file.loc[wildcard.pred,"cellType"], 
+		hasPromoterColumn = lambda wildcard: preds_config_file.loc[wildcard.pred,"hasPromoter"]	
 	message: "Running enrichment plots"
 	run:
 		if {params.isCellType}=={"TRUE"} and {params.hasPromoterColumn}=={"TRUE"}:
