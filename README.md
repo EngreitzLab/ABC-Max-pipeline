@@ -104,7 +104,7 @@ Calling an R script to run ABC-Max.
 
 Example command: 
 ```
-Rscript AnnotateCredibleSets.R --variants /oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.variant.list.txt --credibleSets /oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.cs.txt --outbase /oak/stanford/groups/akundaje/kmualim/test_code//ABC/IBD/ --trait IBD --codeDir /oak/stanford/groups/akundaje/kmualim/github/ABC-Max-pipeline/Utilities/ --predictionFile /oak/stanford/groups/akundaje/kmualim/GWAS_1/ABC/IBD/IBD.ABC.tsv.gz --bgOverlap /oak/stanford/groups/akundaje/kmualim/GWAS_1/ABC/ABC.OverlapAllSNPs.tsv.gz --cellType TRUE --TargetGene TRUE --TargetGeneTSS TRUE
+Rscript AnnotateCredibleSets.R --variants /oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.variant.list.txt --credibleSets /oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/Huang2017-IBD/CredibleSets/IBDCombined.set1-2.cs.txt --outbase /oak/stanford/groups/akundaje/kmualim/test_code//ABC/IBD/ --trait IBD --codeDir /oak/stanford/groups/akundaje/kmualim/github/ABC-Max-pipeline/Utilities/ --predictionFile /oak/stanford/groups/akundaje/kmualim/GWAS_1/ABC/IBD/IBD.ABC.tsv.gz --bgOverlap /oak/stanford/groups/akundaje/kmualim/GWAS_1/ABC/ABC.OverlapAllSNPs.tsv.gz --cellType TRUE --TargetGene TRUE --TargetGeneTSS TRUE
 ```
 
 ### 5. Run Enrichment Plots  
