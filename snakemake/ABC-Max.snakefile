@@ -12,23 +12,23 @@ trait_config = "ABC-Max.config-traits.tsv"
 
 preds_config_file = pd.read_table(pred_config).set_index("entry", drop=False)
 trait_config_file = pd.read_table(trait_config).set_index("entry", drop=False)
-trait_config_file.head()
+#trait_config_file.head()
 
 # Gathering all the outputs for all sets of predictions and variants
-outputSet = set()
+#outputSet = set()
 
 rule all:
 	input:
 #		outputSet,
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
-		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
+		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"])
+#		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
+#		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
 
 
 rule computeBackgroundOverlap:
@@ -38,7 +38,7 @@ rule computeBackgroundOverlap:
 		chrSizes = config["chrSizes"],
 		CDS = config["CDS"]
 	params:
-		cellType = str(lambda wildcard: preds_config_file.loc[wildcard.pred, "cellType"]), 
+		cellType = lambda wildcard: str(preds_config_file.loc[wildcard.pred, "cellType"]), 
 		outDir = expand("{outdir}{{pred}}", outdir=config["outDir"])
 	output:
 		overallOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"),
@@ -48,7 +48,7 @@ rule computeBackgroundOverlap:
 	log: os.path.join(config["logDir"], "{pred}.bgoverlap.log")
 	message: "Overlapping background variants with predictions: {wildcards.pred}"
 	run:
-                 
+		print({params.cellType}=={'True'})
 		shell(
 			"""
 			# TODO: find an alternative to deal with pipefail
@@ -63,7 +63,7 @@ rule computeBackgroundOverlap:
 			
 			# Compute fraction of variants overlapping predictions in each cell type
 			# Finding the relevant columns
-			if {params.cellType=="TRUE"}
+			if {params.cellType}=={'True'}
 			then
 				zcat {input.predFile} | csvtk cut -t -f chr,start,end,CellType | sed 1d | sort -k 1,1 -k 2,2n | uniq | bedtools sort -i stdin -faidx {input.chrSizes} | \
 				bedtools intersect -sorted -g {input.chrSizes} -a {input.allVariants} -b stdin -wa -wb | gzip > {output.overallOverlap};
@@ -194,9 +194,8 @@ rule annotateVariants:
                 isTargetGene = str(lambda wildcard: preds_config_file.loc[wildcard.pred,"TargetGeneTSS"])
 	message: "Annotating {wildcards.trait} variants with {wildcards.pred} predictions"
 	run:
-		print({params.housekeepingList})	
 		#if using ABC predictions, plotting some additional features
-                if any(s.startswith('ABC') for s in list({wildcards.pred})):
+		if any(s.startswith('ABC') for s in list({wildcards.pred})):
                         shell(
                                 """
                                 Rscript {params.projectDir}/AnnotateCredibleSets.R \
@@ -267,6 +266,8 @@ rule runTraitEnrichment:
 	priority: 1
 	message: "Running enrichment plots"
 	run:
+		print({params.isCellType}=={"TRUE"})
+		print({params.isCellType}=="TRUE")
 		if {params.isCellType}=={"TRUE"} and {params.hasPromoterColumn}=={"TRUE"}:
 			shell(
 				"""
