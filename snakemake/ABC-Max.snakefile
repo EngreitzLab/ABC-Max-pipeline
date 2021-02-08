@@ -38,37 +38,37 @@ rule computeBackgroundOverlap:
 		chrSizes = config["chrSizes"],
 		CDS = config["CDS"]
 	params:
-		cellType = lambda wildcard: preds_config_file.loc[wildcard.pred, "cellType"], 
+		cellType = str(lambda wildcard: preds_config_file.loc[wildcard.pred, "cellType"]), 
 		outDir = expand("{outdir}{{pred}}", outdir=config["outDir"])
 	output:
 		overallOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"),
 		overallOverlapCounts = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"),
 		noncodingOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv")
+	priority: 5
 	log: os.path.join(config["logDir"], "{pred}.bgoverlap.log")
 	message: "Overlapping background variants with predictions: {wildcards.pred}"
 	run:
+                 
 		shell(
 			"""
 			# TODO: find an alternative to deal with pipefail
 			set +o pipefail;
 			# Intersecting a background list of variants with predicted enhancers 
 			# to compute background rate at which common variants overlap enhancers
-			# overall
-
-			# TODO: if cell type column is not provided, use all predictions, or require Celltype col?
-		        # make output dir
-			if [ ! -d {output.outDir} ]
+			# make output dir
+			if [ ! -d {params.outDir} ]
 			then
-				mkdir {output.outDir}
-			fi	
+				mkdir {params.outDir}
+			fi
+			
 			# Compute fraction of variants overlapping predictions in each cell type
 			# Finding the relevant columns
-			if {params.cellType}
+			if {params.cellType=="TRUE"}
 			then
 				zcat {input.predFile} | csvtk cut -t -f chr,start,end,CellType | sed 1d | sort -k 1,1 -k 2,2n | uniq | bedtools sort -i stdin -faidx {input.chrSizes} | \
 				bedtools intersect -sorted -g {input.chrSizes} -a {input.allVariants} -b stdin -wa -wb | gzip > {output.overallOverlap};
 			else
-				zcat {input.predFile} | csvtk cut -t -f chr,start,end,CellType | sed 1d | sort -k 1,1 -k 2,2n | uniq | bedtools sort -i stdin -faidx {input.chrSizes} | \
+				zcat {input.predFile} | csvtk cut -t -f chr,start,end | sed 1d | sort -k 1,1 -k 2,2n | uniq | bedtools sort -i stdin -faidx {input.chrSizes} | \
 				bedtools intersect -sorted -g {input.chrSizes} -a {input.allVariants} -b stdin -wa -wb | gzip > {output.overallOverlap};
 			fi
 			
@@ -76,8 +76,7 @@ rule computeBackgroundOverlap:
 			 zcat {output.overallOverlap} | cut -f 7 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.overallOverlapCounts};
 
 			# Compute fraction of noncoding variants overlapping predictions in any cell type
-			 zcat {output.overallOverlap} | bedtools intersect -v -a stdin -b {input.CDS} | cut -f 1-3,7 | sort | uniq | cut -f 4 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.noncodingOverlap}
-			
+			 zcat {output.overallOverlap} | bedtools intersect -v -a stdin -b {input.CDS} | cut -f 1-3,7 | sort | uniq | cut -f 4 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.noncodingOverlap}			
 			""")
 
 rule createVarFiles:
@@ -88,6 +87,7 @@ rule createVarFiles:
 		varBedgraph = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bedgraph", outdir=config["outDir"]),
 		sigvarList = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.sig.varList.tsv", outdir=config["outDir"])
 	log: os.path.join(config["logDir"], "{trait}.{pred}.createbed.log")
+	priority: 4
 	params:
 		varFilterCol = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterCol"],
 		varFilterThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterThreshold"],
@@ -140,6 +140,7 @@ rule overlapVariants:
 		varBedgraph = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bedgraph", outdir=config["outDir"])
 	output:
 		overlap = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"])
+	priority: 3
 	log: os.path.join(config["logDir"], "{trait}.{pred}.overlap.log")
 	params:
 		chrSizes = config["chrSizes"]
@@ -169,6 +170,7 @@ rule annotateVariants:
 	output:
 		touch(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt")),
 		enrichFile = expand("{outdir}{{pred}}/{{trait}}/enrichment/Enrichment.CellType.vsScore.{{trait}}.tsv", outdir=config["outDir"])
+	priority: 2
 	log: os.path.join(config["logDir"], "{trait}.{pred}.annotate.log")
 	params:
                 cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred,"celltypeAnnotation"],
@@ -187,9 +189,9 @@ rule annotateVariants:
                 predColMap = config["predColMap"],
                 geneLists = lambda wildcard:preds_config_file.loc[wildcard.pred,"genes"],
                 genesUniq = lambda wildcard: preds_config_file.loc[wildcard.pred,"genesUniq"],
-                cellType = lambda wildcard: preds_config_file.loc[wildcard.pred,"cellType"],
-                TargetGene = lambda wildcard: preds_config_file.loc[wildcard.pred,"TargetGene"],
-                isTargetGene = lambda wildcard: preds_config_file.loc[wildcard.pred,"TargetGeneTSS"]
+                cellType = str(lambda wildcard: preds_config_file.loc[wildcard.pred,"cellType"]),
+                TargetGene = str(lambda wildcard: preds_config_file.loc[wildcard.pred,"TargetGene"]),
+                isTargetGene = str(lambda wildcard: preds_config_file.loc[wildcard.pred,"TargetGeneTSS"])
 	message: "Annotating {wildcards.trait} variants with {wildcards.pred} predictions"
 	run:
 		print({params.housekeepingList})	
@@ -262,6 +264,7 @@ rule runTraitEnrichment:
 		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.noPromoter.{trait}.tsv"),
 	 	isCellType = lambda wildcard: preds_config_file.loc[wildcard.pred,"cellType"], 
 		hasPromoterColumn = lambda wildcard: preds_config_file.loc[wildcard.pred,"hasPromoter"]	
+	priority: 1
 	message: "Running enrichment plots"
 	run:
 		if {params.isCellType}=={"TRUE"} and {params.hasPromoterColumn}=={"TRUE"}:
@@ -307,7 +310,6 @@ rule plotAggregate:
 		predictors = config["predictions"],
 		projectDir = config["projectDir"],
 		outDir = config["outDir"]
-		
 	message: "Aggregating enrichment plots across predictors"
 	run:
 		shell(
