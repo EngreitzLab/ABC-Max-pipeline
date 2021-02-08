@@ -20,15 +20,15 @@ outputSet = set()
 rule all:
 	input:
 #		outputSet,
-#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
-#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
-#		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
-#		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-#		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-#		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
+		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"]),
-#		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
-#		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
 
 
 rule computeBackgroundOverlap:
@@ -38,12 +38,12 @@ rule computeBackgroundOverlap:
 		chrSizes = config["chrSizes"],
 		CDS = config["CDS"]
 	params:
-		cellType = lambda wildcard: preds_config_file.loc[wildcard.pred, "cellType"]
+		cellType = lambda wildcard: preds_config_file.loc[wildcard.pred, "cellType"], 
+		outDir = expand("{outdir}{{pred}}", outdir=config["outDir"])
 	output:
 		overallOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"),
 		overallOverlapCounts = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"),
-		noncodingOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"),
-		outDir = directory(expand("{outdir}{{pred}}", outdir=config["outDir"]))
+		noncodingOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv")
 	log: os.path.join(config["logDir"], "{pred}.bgoverlap.log")
 	message: "Overlapping background variants with predictions: {wildcards.pred}"
 	run:
@@ -91,7 +91,7 @@ rule createVarFiles:
 	params:
 		varFilterCol = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterCol"],
 		varFilterThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterThreshold"],
-		outDir = directory(expand("{outdir}{{pred}}/{{trait}}/", outdir=config["outDir"])),
+		outDir = expand("{outdir}{{pred}}/{{trait}}/", outdir=config["outDir"]),
 		chrSizes = config["chrSizes"]
 	message: "Creating variant BED files"
 	run:
