@@ -22,6 +22,8 @@
     "predColMap" : "/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/ABCColMap.txt",
     "gex" : "/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/GeneTSSActivityQuantile.tsv",
     "specificityBackground":"/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/allSpecificityScores.SparseMatrix.rds",
+    "predictionsTable":"/oak/stanford/groups/akundaje/kmualim/test/ABC-Max-pipeline/snakemake/ABC-Max.config-preds.tsv",
+    "traitTable":"/oak/stanford/groups/akundaje/kmualim/test/ABC-Max-pipeline/snakemake/ABC-Max.config-traits.tsv",
     "predictions": [
        "ABC"
     ],

@@ -7,8 +7,8 @@ import pandas as pd
 
 #configfile: "ABC-Max.config.json"  ## Specify this on the command line
 
-pred_config = "ABC-Max.config-preds.tsv"
-trait_config = "ABC-Max.config-traits.tsv"
+pred_config = config["predictionsTable"]
+trait_config = config["traitTable"]
 
 preds_config_file = pd.read_table(pred_config).set_index("entry", drop=False)
 trait_config_file = pd.read_table(trait_config).set_index("entry", drop=False)
