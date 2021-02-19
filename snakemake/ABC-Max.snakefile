@@ -80,23 +80,23 @@ rule createVarFiles:
 	output:
 		varBed = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.bed"),
 		varBedgraph = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.bedgraph"),
-		sigvarList = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.sig.varList.tsv"),
-		outDir = os.path.join(config["outDir"], "{pred}/{trait}/")
+		sigvarList = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.sig.varList.tsv")
 	log: os.path.join(config["logDir"], "{trait}.{pred}.createbed.log")
 	priority: 4
 	params:
 		varFilterCol = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterCol"],
 		varFilterThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterThreshold"],
-		chrSizes = config["chrSizes"]
+		chrSizes = config["chrSizes"],
+		outDir = os.path.join(config["outDir"], "{pred}/{trait}/")
 	message: "Creating variant BED files"
 	run:
 		if {params.varFilterCol} is not None:
 			shell(
 				"""
 				# make output dir 
-				if [ ! -d {output.outDir} ]
+				if [ ! -d {params.outDir} ]
                        		then
-                                	mkdir {output.outDir}
+                                	mkdir {params.outDir}
                         	fi
 				# Subsetting the variant list based on significance
 				# Finding the score colum
@@ -255,7 +255,7 @@ rule runTraitEnrichment:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
 		projectDir = config["projectDir"],
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
-		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.noPromoter.{trait}.tsv"),
+		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.noPromoter.tsv"),
 	 	isCellType = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"cellType"]), 
 		hasPromoterColumn = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"hasPromoter"])
 	priority: 1
