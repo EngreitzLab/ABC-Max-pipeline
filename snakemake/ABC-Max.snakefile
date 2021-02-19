@@ -12,7 +12,6 @@ trait_config = config["traitTable"]
 
 preds_config_file = pd.read_table(pred_config).set_index("entry", drop=False)
 trait_config_file = pd.read_table(trait_config).set_index("entry", drop=False)
-#trait_config_file.head()
 
 # Gathering all the outputs for all sets of predictions and variants
 #outputSet = set()
@@ -27,7 +26,7 @@ rule all:
 		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"])
 #		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
 
 
@@ -81,15 +80,15 @@ rule createVarFiles:
 	input:
 		varList = lambda wildcard: trait_config_file.loc[wildcard.trait, "varList"]
 	output:
-		varBed = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bed", outdir=config["outDir"]),
-		varBedgraph = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bedgraph", outdir=config["outDir"]),
-		sigvarList = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.sig.varList.tsv", outdir=config["outDir"])
+		varBed = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.bed"),
+		varBedgraph = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.bedgraph"),
+		sigvarList = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.sig.varList.tsv"),
+		outDir = os.path.join(config["outDir"], "{pred}/{trait}/")
 	log: os.path.join(config["logDir"], "{trait}.{pred}.createbed.log")
 	priority: 4
 	params:
 		varFilterCol = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterCol"],
 		varFilterThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterThreshold"],
-		outDir = expand("{outdir}{{pred}}/{{trait}}/", outdir=config["outDir"]),
 		chrSizes = config["chrSizes"]
 	message: "Creating variant BED files"
 	run:
@@ -97,9 +96,9 @@ rule createVarFiles:
 			shell(
 				"""
 				# make output dir 
-				if [ ! -d {params.outDir} ]
+				if [ ! -d {output.outDir} ]
                        		then
-                                	mkdir {params.outDir}
+                                	mkdir {output.outDir}
                         	fi
 				# Subsetting the variant list based on significance
 				# Finding the score colum
@@ -153,7 +152,7 @@ rule overlapVariants:
 			zcat {input.predFile} | head -1 | awk '{{ print $0 "\\tvariant.chr\\tvariant.start\\tvariant.end\\tQueryRegionName" }}' | gzip > {output.overlap};
 	
 			# Intersecting variants with predictions
-			zcat {input.predFile} | sed 1d | bedtools intersect -sorted -g {params.chrSizes} -b {input.varBedgraph} -a stdin -wb | gzip >> {output.overlap}
+			zcat {input.predFile} | sed 1d | bedtools intersect -g {params.chrSizes} -b {input.varBedgraph} -a stdin -wb | gzip >> {output.overlap}
 			""")
 
 
