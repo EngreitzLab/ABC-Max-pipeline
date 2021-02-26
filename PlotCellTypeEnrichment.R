@@ -10,14 +10,14 @@ suppressPackageStartupMessages(library("RColorBrewer"))
 option_list <- list(
 		    make_option(c("--outdir"), type="character", default="test", help="Output directory"),
 		    make_option(c("--cellTypes"), type="character", default="Test_data/CellTypes.Annotated.ABCPaper.txt", help="Cell type annotation file"),
-	    	    make_option(c("--cellTypeEnrichments"), type="character", default="plots/CellTypeEnrichment.tsv", help= "File containing merged cell type enrichments across traits"),
-  		    make_option(c("--codeDir"), type="character", default="ABC-Max-pipeline/", help="code directory"),
+	    	make_option(c("--cellTypeEnrichments"), type="character", default="plots/CellTypeEnrichment.tsv", help= "File containing merged cell type enrichments across traits"),
+  		  make_option(c("--codeDir"), type="character", default="ABC-Max-pipeline/", help="code directory"),
 		    make_option(c("--trait"), type="character", default="IBD", help="trait name"),
 		    make_option(c("--noPromoter"), type="character", default="FALSE", help="if data is filtered for Promoters")
 		    )
 
 opt <- parse_args(OptionParser(option_list=option_list))
-#dput(opt)
+dput(opt)
 
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(tidyr))
@@ -29,13 +29,14 @@ source(paste0(opt$codeDir, "/Utilities/JuicerUtilities.R"))
 source(paste0(opt$codeDir, "/Utilities/CredibleSetTools.R"))
 
 setwd(opt$outdir)
-save.image(file=paste0(opt$outdir, "/", opt$trait, ".RData"))
+save.image(file=paste0(opt$outdir, "/PlotCellTypeEnrichment.RData"))
 
 ###################################################
 ## Load in data relevant to IBD and format for plotting
 
+## TODO: Factor this out into an input file, so that same script could be run using other cell type category assignments
+##          (these categories are specifically relevant to IBD)
 catOrder <- c("myeloid","Bcell","Tcell","hematopoietic","fibroblast","epithelial","other")
-#catOrder <- c("myeloid","Bcell","Tcell","hematopoietic","epithelial","other")
 catColors <- c("green","orange","blue","purple","pink","brown","gray"); names(catColors) <- catOrder
 
 cell.type.annot.all <- read.delim(opt$cellTypes, sep = "\t", header=TRUE, stringsAsFactors=F)
@@ -69,6 +70,6 @@ mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 45, vjust 
   dev.off()
 }
 
-save.image(file=paste0(opt$outdir, "/", opt$trait, ".RData"))
+save.image(file=paste0(opt$outdir, "/PlotCellTypeEnrichment.RData"))
 
 

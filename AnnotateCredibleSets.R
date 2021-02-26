@@ -206,7 +206,7 @@ dir.create(edir)
 #  tryCatch({
 #curr.vl <- subset(variant.list.filter, Disease==trait)
 variant.by.cells <- getVariantByCellsTable(filter.flat, isTargetGene=opt$TargetGene, isCellType=opt$cellType)
-write.tab(variant.by.cells, file="variant.by.cells.tsv")
+#write.tab(variant.by.cells, file="variant.by.cells.tsv")
 
 if (opt$cellType) {
   isCellType=TRUE
