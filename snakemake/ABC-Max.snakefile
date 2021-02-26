@@ -247,7 +247,9 @@ rule annotateVariants:
                                 --housekeepingList {params.housekeepingList} \
                                 --predColMap {params.predColMap} 
 				""")	
+
 # Added in functionality for data filtered for promoters BUT this is only available for predictions (like ABC) that are have promoters included 
+# TODO:  Regarding above: Rewrite the AnnotateCredibleSets.R function so that it also calculates enrichments after removing all promoter variants (via intersection with a standard promoter variant file)
 rule runTraitEnrichment:
 	input: 
 		cellTypeEnrichments = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
@@ -258,12 +260,12 @@ rule runTraitEnrichment:
 		projectDir = config["projectDir"],
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
 		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.noPromoter.tsv"),
-	 	isCellType = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"cellType"]), 
-		hasPromoterColumn = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"hasPromoter"])
+	 	isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"cellType"]), 
+		hasPromoterColumn = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasPromoter"])
 	priority: 1
-	message: "Running enrichment plots"
+	message: "Running enrichment plots {params.isCellType} {params.hasPromoterColumn}"
 	run:
-		if {params.isCellType}=="True" and {params.hasPromoterColumn}=="True":
+		if {params.isCellType} and {params.hasPromoterColumn}:
 			shell(
 				"""
 				Rscript {params.projectDir}PlotCellTypeEnrichment.R \
@@ -273,28 +275,28 @@ rule runTraitEnrichment:
 				--codeDir {params.projectDir} \
 				--trait {wildcards.trait} 
 				
-                               	Rscript {params.projectDir}PlotCellTypeEnrichment.R \
-                               	--outdir {params.outDir} \
-                               	--cellTypes {params.cellTypeTable} \
-                               	--cellTypeEnrichments {params.cellTypeEnrichments_noPromoter} \
-                               	--codeDir {params.projectDir} \
-                               	--trait {wildcards.trait} \
+               	Rscript {params.projectDir}PlotCellTypeEnrichment.R \
+               	--outdir {params.outDir} \
+               	--cellTypes {params.cellTypeTable} \
+               	--cellTypeEnrichments {params.cellTypeEnrichments_noPromoter} \
+               	--codeDir {params.projectDir} \
+               	--trait {wildcards.trait} \
 				--noPromoter TRUE 
-                               	""")
-		elif {params.isCellType}=="True":
+                """)
+		elif {params.isCellType}:
 			shell(
 				"""
 				Rscript {params.projectDir}PlotCellTypeEnrichment.R \
 				--outdir {params.outDir} \
-                                --cellTypes {params.cellTypeTable} \
-                                --cellTypeEnrichments {input.cellTypeEnrichments} \
-                                --codeDir {params.projectDir} \
-                                --trait {wildcards.trait} \
+                --cellTypes {params.cellTypeTable} \
+                --cellTypeEnrichments {input.cellTypeEnrichments} \
+                --codeDir {params.projectDir} \
+                --trait {wildcards.trait}
 				""")
 		else:
 			shell(
 				"""
-				touch {output.outfile}
+				echo "BAD" > {output.outfile}
 				""")
 
 # TODO: Should we also create aggregate plots for both data that contains promoters and data with filtered out promoters 
