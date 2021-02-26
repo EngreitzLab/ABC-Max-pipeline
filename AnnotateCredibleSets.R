@@ -96,24 +96,27 @@ variant.list <- read.delim(opt$variants, check.names=F)
 # Finding a vector of relevant cell types
 # TODO: Requirements for this file?
 # TODO: only use this celltype table is using the ABC predictions. Else?
-if (opt$cellTypeTable == "TRUE") {	
-	cell.type.annot <- read.delim(opt$cellTypeTable, check.names=F)
-	cell.type.list <- cell.type.annot$CellType
+if (!is.null(opt$cellTypeTable)) {  
+  cell.type.annot <- read.delim(opt$cellTypeTable, check.names=F)
+  cell.type.list <- cell.type.annot$CellType
 } else {
-	if (opt$cellType){
-		data <- read.delim(opt$bgOverlap, check.names=F, header=F)
-		cell.type.list <- unique(data$V8)
-	}
-	# Assuming the 8th column is where the CellType is 
-	else {
-		cell.type.list <- "CELLTYPE"
-	}
+  if (opt$cellType){
+    ## JME: This is not the best way to get this list of cell types
+    data <- read.delim(opt$bgOverlap, check.names=F, header=F)
+    cell.type.list <- unique(data$V8)
+  }
+  # Assuming the 8th column is where the CellType is 
+  else {
+    ## JME: I don't understand what this does?
+    cell.type.list <- "CELLTYPE"
+  }
 }
 
 
 # All credible sets
 all.cs <- read.delim(opt$credibleSets, check.names=F, stringsAsFactors=F)
 all.cs$CredibleSet <- factor(all.cs$CredibleSet)
+
 # Optionally removing all coding, splice site, and promoter variants. These sets
 # are used in the enrichment analysis.
 filter.cs <- subset(all.cs, (!AnyCoding | !opt$removeCodingVariants) &
@@ -134,8 +137,9 @@ if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
 # Overlapping variants with predictions
 # TODO: edit loadVariantOverlap() so that predColMap is no longer needed
 # TODO: generalize so that this can be run for any set of predictions with
+# TODO: JME - Check whether filterVariantOverlaps should also be run on others
 # the required column names
-if (opt$isABC){
+if (opt$isABC) {
   predColMap <- if (!is.null(opt$predColMap)) read.delim(opt$predColMap, stringsAsFactors=F) else NULL
   overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, colMap=predColMap, isTargetGene=opt$TargetGene, isTargetGeneTSS=opt$TargetGeneTSS)
   overlap <- filterVariantOverlap(overlap, opt$cutoff, opt$cutoffTss, hk.list)  
@@ -146,7 +150,7 @@ if (opt$isABC){
 # Annotating overlaps
 all.flat <- annotateVariantOverlaps(overlap, variant.list, all.cs)
 if (opt$cellType){
-	all.flat <- subset(all.flat, CellType %in% cell.type.list)  ## IMPORTANT CHANGE
+  all.flat <- subset(all.flat, CellType %in% cell.type.list)  ## IMPORTANT CHANGE
 }
 filter.flat <- subset(all.flat, CredibleSet %in% filter.cs$CredibleSet)
 
@@ -165,21 +169,6 @@ if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
 #traits <- unique(all.cs$Disease)
 trait <- opt$trait
 
-# Not using the gene lists?
-# gene.lists <- loadGeneLists(opt$geneLists)
-
-#if (!is.null(opt$e2gAltMethods)) {
-#  alt.overlap <- loadVariantOverlap(opt$e2gAltMethods, genes.uniq, genes, variant.names=variant.list$variant, overwriteTSS=TRUE)
-#  alt.overlap <- annotateVariantOverlaps(alt.overlap, variant.list, all.cs)
-#  gene.lists <- c(gene.lists, getGeneListsFromE2GOverlap(alt.overlap, opt$posteriorProb))
-#} else {
-#  alt.overlap <- NULL
-#}
-
-#if (!is.null(opt$geneScores)) {
-#  gene.scores <- read.delim(opt$geneScores, check.names=F, stringsAsFactors=F)
-#  gene.lists <- c(gene.lists, getGeneListsFromGeneScores(alt.overlap, opt$posteriorProb))
-#}
 
 # Creating an output directory and writing the result to files
 dir.create(paste0(opt$outbase,"data/"))
@@ -210,7 +199,8 @@ bgOverlap <-read.delim(gzfile(opt$bgOverlap), check.names=F, header=F)
 edir <- paste0(opt$outbase, "enrichment/")
 dir.create(edir)
 
-pdf(file=paste0(opt$outbase, "Enrichment.CellType.vsScore.pdf"), width=5, height=5)
+#pdf(file=paste0(opt$outbase, "Enrichment.CellType.vsScore.pdf"), width=5, height=5)
+
 # Note: assuming one trait
 #for (trait in unique(variant.list.filter$Disease)) {
 #  tryCatch({
@@ -218,10 +208,10 @@ pdf(file=paste0(opt$outbase, "Enrichment.CellType.vsScore.pdf"), width=5, height
 variant.by.cells <- getVariantByCellsTable(filter.flat, isTargetGene=opt$TargetGene, isCellType=opt$cellType)
 write.tab(variant.by.cells, file="variant.by.cells.tsv")
 
-if (opt$cellType){
-	isCellType=TRUE
+if (opt$cellType) {
+  isCellType=TRUE
 } else {
-	isCellType=FALSE
+  isCellType=FALSE
 }
 # TODO: change "variant" column to rsID?
 if (opt$TargetGeneTSS) {
@@ -230,33 +220,33 @@ if (opt$TargetGeneTSS) {
                                       variant.list.filter,
                                       cell.type.list,
                                       trait,
-				      score.col=opt$variantScoreCol,
+                                      score.col=opt$variantScoreCol,
                                       min.score=opt$variantScoreThreshold,
                                       bg.vars=bgVars,
-				      bg.overlap=bgOverlap,
-				      isCellType=isCellType)
+                                      bg.overlap=bgOverlap,
+                                      isCellType=isCellType)
   # Without promoters
   enrich.nopromoter <- computeCellTypeEnrichment(getVariantByCellsTable(subset(filter.flat, !Promoter), opt$variantScoreCol),
                                                  subset(variant.list.filter, !Promoter),
                                                  cell.type.list,
-						 trait,
+                                                 trait,
                                                  score.col=opt$variantScoreCol,
                                                  min.score=opt$variantScoreThreshold, 
-						 bg.vars=bgVars, 
-						 bg.overlap=bgOverlap, 
-						 isCellType=isCellType)
+                                                 bg.vars=bgVars, 
+                                                 bg.overlap=bgOverlap, 
+                                                 isCellType=isCellType)
   enrich <- merge(enrich, enrich.nopromoter %>% select(CellType), by="CellType", suffixes=c("",".NoPromoters"))
   #enrich <- merge(enrich, enrich.nopromoter %>% select(CellType,vsGenome.enrichment,vsGenome.log10pBinom,vsGenome.Significant), by="CellType", suffixes=c("",".NoPromoters"))
 } else {
   enrich <- computeCellTypeEnrichment(variant.by.cells,
                                       variant.list=variant.list.filter,
                                       cell.type.list,
-				      trait,
+                                      trait,
                                       score.col=opt$variantScoreCol,
                                       min.score=opt$variantScoreThreshold,
                                       bg.vars=bgVars, 
-				      bg.overlap=bgOverlap, 
-				      isCellType=isCellType)
+                                      bg.overlap=bgOverlap, 
+                                      isCellType=isCellType)
 }
 print("Saving")
 write.tab(enrich, file=paste0(edir, "/Enrichment.CellType.vsScore.", trait,".tsv"))
