@@ -26,7 +26,10 @@ rule all:
 		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"])
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
+		expand("{outdir}{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand("{outdir}{pred}/{trait}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand("{outdir}{pred}/{trait}/GenePrecisionRecall.pdf", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"])
 #		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
 
 
@@ -166,138 +169,141 @@ rule annotateVariants:
 		bgOverlap = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.tsv.gz", outdir=config["outDir"]) 
 	output:
 		touch(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt")),
-		enrichFile = expand("{outdir}{{pred}}/{{trait}}/enrichment/Enrichment.CellType.vsScore.{{trait}}.tsv", outdir=config["outDir"])
+		enrichFile = expand("{outdir}{{pred}}/{{trait}}/enrichment/Enrichment.CellType.vsScore.{{trait}}.tsv", outdir=config["outDir"]),
+		genePredTable = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"])
 	priority: 2
 	log: os.path.join(config["logDir"], "{trait}.{pred}.annotate.log")
 	params:
-                cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred,"celltypeAnnotation"],
-                codeDir = config["codeDir"],
-                projectDir = config["projectDir"],
-                outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
-                scoreCol = lambda wildcard: trait_config_file.loc[wildcard.trait,"varFilterCol"],
-                scoreType = lambda wildcard: trait_config_file.loc[wildcard.trait,"varScoreType"],
-                scoreThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait,"varFilterThreshold"],
-                ctrlThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait,"varCtrlThreshold"],
-                gex = config["gex"],
-                promoterActivityRef = config["promoterActivityRef"],
-                cellTypeCov = config["cellTypeCov"],
-                specificityBackground = config["specificityBackground"],
-                housekeepingList = config["housekeepingList"],
-                predColMap = config["predColMap"],
-                geneLists = lambda wildcard:preds_config_file.loc[wildcard.pred,"genes"],
-                genesUniq = lambda wildcard: preds_config_file.loc[wildcard.pred,"genesUniq"],
-                cellType = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"cellType"]),
-                TargetGene = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"TargetGene"]),
-                isTargetGene = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"TargetGeneTSS"])
+		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred,"celltypeAnnotation"],
+		codeDir = config["codeDir"],
+		projectDir = config["projectDir"],
+		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
+		predScoreCol = lambda wildcard: preds_config_file.loc[wildcard.pred,"predScoreCol"],
+		minPredScore = lambda wildcard: preds_config_file.loc[wildcard.pred,"minPredScore"],
+		minPredScorePromoter = lambda wildcard: preds_config_file.loc[wildcard.pred,"minPredScorePromoter"],
+		varScoreCol = lambda wildcard: trait_config_file.loc[wildcard.trait,"varFilterCol"],
+		varScoreType = lambda wildcard: trait_config_file.loc[wildcard.trait,"varScoreType"],
+		varScoreThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait,"varFilterThreshold"],
+		genes = lambda wildcard:preds_config_file.loc[wildcard.pred,"genes"],
+		genesUniq = lambda wildcard: preds_config_file.loc[wildcard.pred,"genesUniq"],
+		cellType = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"cellType"]),
+		isTargetGene = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"TargetGeneTSS"])
 	message: "Annotating {wildcards.trait} variants with {wildcards.pred} predictions"
 	run:
-		#if using ABC predictions, plotting some additional features
-		if any(s.startswith('ABC') for s in list({wildcards.pred})):
-                        shell(
-                                """
-                                Rscript {params.projectDir}/AnnotateCredibleSets.R \
-                                --variants {input.varList} \
-                                --predictionFile {input.predOverlapFile} \
-                                --backgroundVariants {input.bgVars} \
-                                --bgOverlap {input.bgOverlap} \
-                                --outbase {params.outDir} \
-                                --trait {wildcards.trait} \
-                                --credibleSets {input.csList} \
-                                --codeDir {params.codeDir} \
-                                --cellTypeTable {params.cellTypeTable} \
-                                --gex {params.gex} \
-                                --promoterActivityRef {params.promoterActivityRef} \
-                                --cellTypeCov {params.cellTypeCov} \
-                                --specificityBackground {params.specificityBackground} \
-                                --housekeepingList {params.housekeepingList} \
-                                --predColMap {params.predColMap} \
-                                --genes {params.geneLists} \
-                                --genesUniq {params.genesUniq} \
-                                --cellType {params.cellType} \
-                                --TargetGene {params.TargetGene} \
-                                --TargetGeneTSS {params.isTargetGene}
-                                """)
-		else:
-                        shell(
-                                """
-                                Rscript {params.projectDir}/AnnotateCredibleSets.R \
-                                --variants {input.varList} \
-                                --predictionFile {input.predOverlapFile} \
-                                --backgroundVariants {input.bgVars} \
-                                --bgOverlap {input.bgOverlap} \
-                                --isABC FALSE \
-                                --outbase {params.outDir} \
-                                --trait {wildcards.trait} \
-                                --credibleSets {input.csList} \
-                                --codeDir {params.codeDir} \
-                                --variantScoreCol {params.scoreCol} \
-                                --scoreType {params.scoreType} \
-                                --variantScoreThreshold {params.scoreThreshold} \
-                                --variantCtrlScoreThreshold {params.ctrlThreshold} \
-                                --cellTypeTable {params.cellTypeTable} \
-                                --gex {params.gex} \
-                                --promoterActivityRef {params.promoterActivityRef} \
-                                --cellTypeCov {params.cellTypeCov} \
-                                --specificityBackground {params.specificityBackground} \
-                                --genes {params.geneLists} \
-                                --genesUniq {params.genesUniq} \
-                                --cellType {params.cellType} \
-                                --TargetGene {params.TargetGene} \
-                                --TargetGeneTSS {params.isTargetGene} \
-                                --housekeepingList {params.housekeepingList} \
-                                --predColMap {params.predColMap} 
+		shell(
+                """
+                Rscript {params.projectDir}/Utilities/AnnotateCredibleSets.R \
+                --variants {input.varList} \
+                --credibleSets {input.csList} \
+                --predictionFile {input.predOverlapFile} \
+                --methodName {wildcards.pred} \
+                --outbase {params.outDir} \
+                --outEnrichment {output.enrichFile} \
+                --outGenePredTable {output.genePredTable} \
+                --predScoreCol {params.predScoreCol} \
+                --minPredScore {params.minPredScore} \
+                --minPredScorePromoters {params.minPredScorePromoter} \
+                --backgroundVariants {input.bgVars} \
+                --bgOverlap {input.bgOverlap} \
+                --trait {wildcards.trait} \
+                --codeDir {params.codeDir} \
+                --variantScoreCol {params.varScoreCol} \
+                --variantScoreThreshold {params.varScoreThreshold} \
+                --cellTypeTable {params.cellTypeTable} \
+                --genes {params.genes} \
+                --genesUniq {params.genesUniq} \
+                --cellType {params.cellType} \
+                --TargetGeneTSS {params.isTargetGene}
 				""")	
 
 # Added in functionality for data filtered for promoters BUT this is only available for predictions (like ABC) that are have promoters included 
-# TODO:  Regarding above: Rewrite the AnnotateCredibleSets.R function so that it also calculates enrichments after removing all promoter variants (via intersection with a standard promoter variant file)
-rule runTraitEnrichment:
+# TODO:  Regarding above: Add rule above to intersect variants (or predictions?) with promoter file and annotate accordingly. Then,
+##             Edit AnnotateCredibleSets.R function so that it also calculates enrichments after removing all promoter variants
+rule plotTraitEnrichment:
 	input: 
 		cellTypeEnrichments = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
 	output:
-		outfile = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf")
+		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"),
+		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.eps")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
 		projectDir = config["projectDir"],
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
-		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.noPromoter.tsv"),
+		#cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.noPromoter.tsv"),
 	 	isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"cellType"]), 
-		hasPromoterColumn = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasPromoter"])
+		#hasPromoterColumn = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasPromoter"])
 	priority: 1
-	message: "Running enrichment plots {params.isCellType} {params.hasPromoterColumn}"
+	message: "Running enrichment plots"
 	run:
-		if {params.isCellType} and {params.hasPromoterColumn}:
-			shell(
-				"""
-				Rscript {params.projectDir}PlotCellTypeEnrichment.R \
-				--outdir {params.outDir} \
-				--cellTypes {params.cellTypeTable} \
-				--cellTypeEnrichments {input.cellTypeEnrichments} \
-				--codeDir {params.projectDir} \
-				--trait {wildcards.trait} 
-				
-               	Rscript {params.projectDir}PlotCellTypeEnrichment.R \
-               	--outdir {params.outDir} \
-               	--cellTypes {params.cellTypeTable} \
-               	--cellTypeEnrichments {params.cellTypeEnrichments_noPromoter} \
-               	--codeDir {params.projectDir} \
-               	--trait {wildcards.trait} \
-				--noPromoter TRUE 
-                """)
-		elif {params.isCellType}:
-			shell(
-				"""
-				Rscript {params.projectDir}PlotCellTypeEnrichment.R \
-				--outdir {params.outDir} \
-                --cellTypes {params.cellTypeTable} \
-                --cellTypeEnrichments {input.cellTypeEnrichments} \
-                --codeDir {params.projectDir} \
-                --trait {wildcards.trait}
-				""")
-		else:
-			shell(
-				"""
-				echo "BAD" > {output.outfile}
-				""")
+		shell(
+			"""
+			Rscript {params.projectDir}Utilities/PlotCellTypeEnrichment.R \
+			--outdir {params.outDir} \
+			--outPdf {output.outpdf} \
+			--outEps {output.outeps} \
+			--cellTypes {params.cellTypeTable} \
+			--cellTypeEnrichments {input.cellTypeEnrichments} \
+			--codeDir {params.projectDir} \
+			--trait {wildcards.trait} 
+			""")
+
+		if False:   ## TODO:  Rewrite this.  Make the "plot enrichment minus promoter variants" its own separate rule"
+			if {params.isCellType} and {params.hasPromoterColumn}:
+				shell(
+					"""
+					Rscript {params.projectDir}PlotCellTypeEnrichment.R \
+					--outdir {params.outDir} \
+					--outPdf {params.outfile} \
+					--outEps {params.outfile}
+					--cellTypes {params.cellTypeTable} \
+					--cellTypeEnrichments {input.cellTypeEnrichments} \
+					--codeDir {params.projectDir} \
+					--trait {wildcards.trait} 
+					
+	               	Rscript {params.projectDir}PlotCellTypeEnrichment.R \
+	               	--outdir {params.outDir} \
+	               	--cellTypes {params.cellTypeTable} \
+	               	--cellTypeEnrichments {params.cellTypeEnrichments_noPromoter} \
+	               	--codeDir {params.projectDir} \
+	               	--trait {wildcards.trait} \
+					--noPromoter TRUE 
+	                """)
+			elif {params.isCellType}:
+				shell(
+					"""
+					Rscript {params.projectDir}PlotCellTypeEnrichment.R \
+					--outdir {params.outDir} \
+	                --cellTypes {params.cellTypeTable} \
+	                --cellTypeEnrichments {input.cellTypeEnrichments} \
+	                --codeDir {params.projectDir} \
+	                --trait {wildcards.trait}
+					""")
+			else:
+				shell(
+					"""
+					echo "BAD" > {output.outfile}
+					""")
+
+rule plotGenePrecisionRecall:
+	input:
+		genePredTable = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"]),
+		knownGenes = lambda wildcard: trait_config_file.loc[wildcard.trait, "knownGenes"]
+	output:
+		prPdf = os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf")
+	params:
+		codeDir = config["codeDir"],
+		projectDir = config["projectDir"]
+	message: "Running precision-recall plot for {wildcards.trait} and {wildcards.pred} predictions"
+	run:
+		shell(
+			"""
+			Rscript {params.projectDir}Utilities/PlotGenePrecisionRecall.R \
+			--outPdf {output.prPdf} \
+			--genePredTable {input.genePredTable} \
+			--knownGenes {input.knownGenes} \
+			--codeDir {params.projectDir}
+			""")
+
 
 # TODO: Should we also create aggregate plots for both data that contains promoters and data with filtered out promoters 
 rule plotAggregate:
@@ -312,7 +318,7 @@ rule plotAggregate:
 	run:
 		shell(
 			"""
-			python {params.projectDir}plot_aggregate.py \
+			python {params.projectDir}Utilities/plot_aggregate.py \
 			--traits {wildcards.trait} \
 			--predictor_of_choice {params.predictorOfChoice} \
 			--data_outdir {params.outDir} \
