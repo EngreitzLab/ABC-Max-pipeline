@@ -10,6 +10,7 @@
 ##  ways by other scripts.
 
 suppressPackageStartupMessages(library(optparse))
+suppressPackageStartupMessages(library(data.table))
 
 # TODO: match ABC.Score/ABC.Score throughout
 # TODO: refactor so that finemapping info is optional
@@ -25,9 +26,8 @@ option.list <- list(
   make_option("--outEnrichment", type="character", default="./Enrichment.CellType.vsScore.tsv", help="Output cell type enrichment table"),
   make_option("--outGenePredTable", type="character", default="./GenePredictions.allCredibleSets.tsv", help="Output gene prediction table filename"),
 
-  make_option("--cellType", type="character", default=TRUE, help="Do predictions have an associated cellType column?"),
-  make_option("--TargetGene", type="character", default=TRUE, help="Do predictions have an associated targetGene column?"),
-  make_option("--TargetGeneTSS", type="character", default=TRUE, help="Do predictions have an associated targetGeneTSS column?"),
+  make_option("--hasCellType", type="logical", default=TRUE, help="Do predictions have an associated cellType column?"),
+  make_option("--hasTargetGeneTSS", type="logical", default=TRUE, help="Do predictions have an associated targetGeneTSS column?"),
   # TODO: edit downstream steps so that these are only used for ABC predictions
   make_option("--minPredScore", type="numeric", default=NA, help="Cutoff on prediction score for distal elements"),
   make_option("--minPredScorePromoters", type="numeric", default=NA, help="Cutoff on prediction score for tss/promoter elements"),
@@ -38,9 +38,13 @@ option.list <- list(
   # make_option("--variantCtrlScoreThreshold", type="numeric", default=0.01, help="Score cutoff for for a control set of variants, e.g. PP<0.01"),
   # TODO: Move the background variant calculation to another script, because it needs to be run once for every prediction method, not once for every prediction method x trait combination
   make_option("--backgroundVariants", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/all.bg.SNPs.bed.gz", help="A set of background variants to use in the enrichment analysis. Bed format with chr, start, end, rsID"),
-  make_option("--bgOverlap", type="character", default="/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_out/ABC.OverlapAllSNPs.tsv.gz", help="Background variant overlap with predictions"),
+  make_option("--backgroundVariants_noPromoter", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/all.bg.SNPs.noPromoter.bed.gz", help="A set of background variants to use in the enrichment analysis. Bed format with chr, start, end, rsID"),
+  make_option("--bgOverlap", type="character", default="/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_out/ABC.OverlapAllSNPs.tsv.gz", help="Background variant overlap with predictions. Bed format with chr, start, end, rsID, enh-chr, enh-start, enh-end, CellType"),
+  make_option("--bgOverlap_noPromoter", type="character", default="/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_out/ABC.OverlapAllSNPs.noPromoter.tsv.gz", help="Background variant overlap with predictions. Bed format with chr, start, end, rsID, enh-chr, enh-start, enh-end, CellType"),
   make_option("--genes", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed", help="RefSeq gene BED file; this is to pull RefSeq IDs to determine coding/noncoding"),
-  make_option("--genesUniq", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed", help="Collapsed RefSeq gene BED file used for E-G predictions"),
+  make_option("--genesUniq", type="character", default="/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed", help="Collapsed RefSeq gene BED file used for E-G predictions"),
+  make_option("--geneTSS", type="character", default="/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed", help="TSS of genes file calculated"),
+  make_option("--chr_sizes", type="character", help="Chromosome sizes"),
   # /oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/ABC-GWAS/data/CellTypes.Annotated.ABCPaper.txt
 
   make_option("--genePredMaxDistance", type="numeric", default=1000000, help="Gene prediction table: Include genes within this distance"),
@@ -83,15 +87,13 @@ saveProgress()
 ## Load common data
 
 # convert all boolean to caps strings
-## TODO: Change these to booleans instead of string!
-opt$cellType <- as.logical(toupper(opt$cellType))
-opt$TargetGene <- as.logical(toupper(opt$TargetGene))
-opt$TargetGeneTSS <- as.logical(toupper(opt$TargetGeneTSS))
-
+## TODO: Change these to booleans instead of string, DONE
+opt$hasCellType <- as.logical(opt$hasCellType)
+opt$hasTargetGeneTSS <- as.logical(opt$hasTargetGeneTSS)
+genes.tss.file = opt$geneTSS
 # All genes
-## TODO: Move all of this gene processing logic somewhere else, so that the gene files input into this script are fully ready
+## TODO: Move all of this gene processing logic somewhere else, so that the gene files input into this script are fully ready ; DONE
 genes <- readBed(opt$genes)
-genes$symbol <- unlist(lapply(strsplit(as.character(as.matrix(genes$name)), ";"), "[", 1))
 genes <- addTSSToBED(genes)
 
 # Genes used in the predictions
@@ -99,9 +101,8 @@ genes.uniq <- readBed(opt$genesUniq)
 genes.uniq <- addTSSToBED(genes.uniq)
 
 ## Only include protein-coding genes
-genes <- subset(genes, !grepl("NR_",name) & symbol %in% genes.uniq$name)
-genes.uniq <- subset(genes.uniq, name %in% genes$symbol)
-  
+genes.uniq <- subset(genes.uniq, name %in% genes$name)
+
 # Housekeeping genes to ignore
 # hk.list <- read.delim(opt$housekeepingList, header=F, stringsAsFactors=F)[,1]
 
@@ -111,21 +112,23 @@ variant.list <- read.delim(opt$variants, check.names=F)
 #diseases <- unique(variant.list$Disease)
 
 # Finding a vector of relevant cell types
-# TODO: Requirements for this file?
+# TODO: Requirements for this file? CellType | Categorical.IBDTissueAnnotations2
 # TODO: only use this celltype table is using the ABC predictions. Else?
 if (!is.null(opt$cellTypeTable)) {  
   cell.type.annot <- read.delim(opt$cellTypeTable, check.names=F)
   cell.type.list <- cell.type.annot$CellType
 } else {
-  if (opt$cellType) {
+  if (opt$hasCellType) {
     ## JME: This is not the best way to get this list of cell types
-    data <- read.delim(opt$bgOverlap, check.names=F, header=F)
-    cell.type.list <- unique(data$V8)
+    ## KSM: Updated to grab celltypes from prediction file instead
+    data <- read.delim(opt$predictionFile, check.names=F)
+    cell.type.list <- unique(data$CellType)
   }
   # Assuming the 8th column is where the CellType is 
   else {
     ## JME: I don't understand what this does?
-    cell.type.list <- "CELLTYPE"
+    ## KSM: Initializing the variable 
+    cell.type.list <- NULL
   }
 }
 
@@ -154,13 +157,13 @@ if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
 
 # Overlapping variants with predictions
 # the required column names
-overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, isTargetGeneTSS=opt$TargetGeneTSS)
+overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, isTargetGeneTSS=opt$hasTargetGeneTSS)
 overlap <- filterVariantOverlap(overlap, opt$predScoreCol, opt$minPredScore, opt$minPredScorePromoters)
 
 
 # Annotating overlaps
 all.flat <- annotateVariantOverlaps(overlap, variant.list, all.cs)
-if (opt$cellType) {
+if (opt$hasCellType) {
   all.flat <- subset(all.flat, CellType %in% cell.type.list)  ## IMPORTANT CHANGE
 }
 filter.flat <- subset(all.flat, CredibleSet %in% filter.cs$CredibleSet)
@@ -175,14 +178,24 @@ if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
 #traits <- unique(all.cs$Disease)
 trait <- opt$trait
 
+# specify file names 
+all.flat.file=paste0(opt$outbase, "data/all.flat.tsv")
+filter.flat.file=paste0(opt$outbase, "data/filter.flat.tsv")
+variant.list.filter.file=paste0(opt$outbase, "data/variant.filter.tsv")
+
 # Creating an output directory and writing the result to files
 dir.create(paste0(opt$outbase,"data/"))
-write.tab(all.flat, file=paste0(opt$outbase, "data/all.flat.tsv"))
-write.tab(filter.flat, file=paste0(opt$outbase, "data/filter.flat.tsv"))
+
+filter.flat <- filter.flat[, c((1:ncol(filter.flat))[-1], 1)]
+write.tab(all.flat, file=all.flat.file)
+write.tab(filter.flat, file=filter.flat.file)
 if (!(is.null(sigScore.flat))) {
   write.tab(sigScore.flat, file=paste0(opt$outbase, "data/sigScore.flat.tsv"))
 }
-
+variant.list.filter$pos_end <- variant.list.filter$position + 1
+colnames <- names(variant.list.filter)
+variant.list.filter <- variant.list.filter[, c(1, 2, length(colnames), 3:length(colnames)-1)]
+write.tab(variant.list.filter, file=variant.list.filter.file)
 # Reading in the gene TSS activity quantile information
 # gex <- read.delim(opt$gex, check.names=F)
 
@@ -190,10 +203,6 @@ if (!(is.null(sigScore.flat))) {
 ##############################################################################
 ## Calculate enrichment per cell type by comparing the significant/provided
 ## variants with a set of background variants
-
-# A set of background variants
-bgVars <- read.delim(gzfile(opt$backgroundVariants), check.names=F, header=F)  ## TODO: Only need the count from this file
-bgOverlap <-read.delim(gzfile(opt$bgOverlap), check.names=F, header=F)  ## TODO: The prediction - bgOverlap is the same for every trait
 
 # Use the set of background variants instead of ctrlPP
 # Remove the column from output that uses ctrlPP
@@ -207,8 +216,40 @@ dir.create(edir)
 #for (trait in unique(variant.list.filter$Disease)) {
 #  tryCatch({
 #curr.vl <- subset(variant.list.filter, Disease==trait)
-variant.by.cells <- getVariantByCellsTable(filter.flat, isTargetGene=opt$TargetGene, isCellType=opt$cellType)
+variant.by.cells <- getVariantByCellsTable(filter.flat, isCellType=opt$hasCellType)
 #write.tab(variant.by.cells, file="variant.by.cells.tsv")
+## Get Corresponding background variant, background Overlap and prediction File without regions that
+# intersect with promoters
+# A set of background variants
+bgVars <- read.delim(opt$backgroundVariants, check.names=F, header=F)  
+bgVars_noPromoter <- read.delim(opt$backgroundVariants_noPromoter, check.names=F, header=F)
+bgOverlap <-read.delim(opt$bgOverlap, check.names=F, header=F)
+bgOverlap_noPromoter <- read.delim(opt$bgOverlap_noPromoter, check.names=F, header=F)
+
+# get filter.flat with no Promoters
+noPromoters = paste0(opt$outbase, "data/filter.flat.noPromoters.tsv")
+getNoPromoterPredictions(filter.flat.file, noPromoters, genes.tss.file)
+variant.file.noPromoter <- read.table(noPromoters, header=T)
+variant.by.cells.noPromoter <- getVariantByCellsTable(variant.file.noPromoter, isCellType=opt$hasCellType)
+
+# variant.list.filter with no Promoters
+variant.list.noPromoter.file=paste0(opt$outbase, "data/variant.filter.noPromoters.tsv")
+getNoPromoterPredictions(variant.list.filter.file, variant.list.noPromoter.file, genes.tss.file)
+variant.list.noPromoters <- read.table(variant.list.noPromoter.file, header=T)
+
+# get compute celltype enrichment variables 
+#backgroundCounts <- getComputeCellTypeEnrichmentVariables(opt$backgroundVariants, opt$bgOverlap, isCellType=opt$hasCellType)
+#backgroundCounts_noPromoter <- getComputeCellTypeEnrichmentVariables(opt$backgroundVariants_noPromoter, opt$bgOverlap_noPromoter, isCellType=opt$hasCellType)
+#bgVars.count <- backgroundCounts[0]
+#bgOverlap.count <- backgroundCounts[1]
+#bgVars.count.noPromoter <- backgroundCounts_noPromoter[0]
+#bgOverlap.variant.count.noPromoter <- backgroundCounts_noPromoter[1]
+#print(bgVars.count)
+#print(bgOverlap.count)
+#print(bgVars.count.noPromoter)
+#print(bgOverlap.variant.count.noPromoter)
+#write.table(backgroundCounts, file="bgVars.count")
+#write.table(backgroundCounts_noPromoter, file="bgOverlap.count")
 
 # With promoters
 enrich <- computeCellTypeEnrichment(variant.by.cells,
@@ -217,27 +258,27 @@ enrich <- computeCellTypeEnrichment(variant.by.cells,
                                     trait,
                                     score.col=opt$variantScoreCol,
                                     min.score=opt$variantScoreThreshold,
-                                    bg.vars=bgVars,
-                                    bg.overlap=bgOverlap,
-                                    isCellType=opt$cellType,
+                                    bg.vars=bgVars$V1,
+                                    bg.overlap=bgOverlap$V1,
+                                    isCellType=opt$hasCellType,
                                     enrichment.threshold=opt$biosampleEnrichThreshold)
 
+
 ## TODO: This logic for doing enrichment without promoters needs to be reworked
-if (opt$TargetGeneTSS) {
-  # Without promoters
-  enrich.nopromoter <- computeCellTypeEnrichment(getVariantByCellsTable(subset(filter.flat, !Promoter), opt$variantScoreCol),
-                                                 subset(variant.list.filter, !Promoter),
-                                                 cell.type.list,
-                                                 trait,
-                                                 score.col=opt$variantScoreCol,
-                                                 min.score=opt$variantScoreThreshold, 
-                                                 bg.vars=bgVars, 
-                                                 bg.overlap=bgOverlap, 
-                                                 isCellType=opt$cellType,
-                                                 enrichment.threshold=opt$biosampleEnrichThreshold)
-  enrich <- merge(enrich, enrich.nopromoter %>% select(CellType), by="CellType", suffixes=c("",".NoPromoters"))
-  #enrich <- merge(enrich, enrich.nopromoter %>% select(CellType,vsGenome.enrichment,vsGenome.log10pBinom,vsGenome.Significant), by="CellType", suffixes=c("",".NoPromoters"))
-}
+## KSM: reworked to run on all predictions 
+# Without promoters
+enrich.nopromoter <- computeCellTypeEnrichment(variant.by.cells.noPromoter,
+                                               variant.list.noPromoters,
+                                               cell.type.list,
+                                               trait,
+                                               score.col=opt$variantScoreCol,
+                                               min.score=opt$variantScoreThreshold, 
+                                               bg.vars=bgVars_noPromoter$V1, 
+                                               bg.overlap=bgOverlap_noPromoter$V1, 
+                                               isCellType=opt$hasCellType,
+                                               enrichment.threshold=opt$biosampleEnrichThreshold)
+
+enrich <- merge(enrich, enrich.nopromoter, by="CellType", suffixes=c("",".NoPromoters"))
 
 print("Saving")
 write.tab(enrich, file=opt$outEnrichment)

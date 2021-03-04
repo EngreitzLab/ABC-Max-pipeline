@@ -5,7 +5,7 @@
 suppressPackageStartupMessages(library(GenomicRanges))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(tidyr))
-
+suppressPackageStartupMessages(library(data.table))
 
 ## for dplyr < 0.7
 ## TODO: Fix conda env to use later version of R and dplyr
@@ -86,18 +86,16 @@ annotateVariantOverlaps <- function(overlap, variant.list, all.cs, var.cols=c("C
 ## Functions for making and loading data from permutation tables written by MakeVariantCountTables.R
 
 # Changed to use score col instead of PP
-# Changed ABC.Score to ABC.score, is this correct?
-# TODO: use column name based on selection
-getVariantByCellsTable <- function(overlap, score.col="PosteriorProb", isTargetGene=TRUE, isCellType=TRUE) {
-    if ( isCellType & isTargetGene ) {
-  	variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), max.ABC=max(ABC.Score), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
+# TODO: use column name based on selection 
+# TODO: need to change isABC to score column ; modified based on assumption that E-G links
+getVariantByCellsTable <- function(overlap, score.col=NULL, isCellType=TRUE) {
+    if ( isCellType & !is.null(score.col) ) {
+  	variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), max.score.col=max(score.col), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
 	return(variant.by.cells)
   } else {
-	  if ( !isTargetGene & !isCellType ) {
-  		variant.by.cells <- overlap %>% group_by(QueryRegionName) %>% summarise( n.genes=n(), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
-	  } else if (isCellType) {
-		  variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
-	  } else if (isTargetGene) {
+	  if ( isCellType & is.null(score.col) ) {
+		variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
+	  } else if ( !isCellType & is.null(score.col) ) {
 		  variant.by.cells <- overlap %>% group_by(QueryRegionName) %>% summarise( n.genes=n(), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()}
 	}
 	return(variant.by.cells)
@@ -139,6 +137,55 @@ countCellTypeOverlaps <- function(dat, cell.type.list, variant.names=NULL, cell.
 }
 
 
+getNoPromoterPredictions <- function(filter.flat.file, noPromoters, tssFile) {
+	noPromoters_tmp = paste0(noPromoters, ".tmp")
+	command = paste("cat", filter.flat.file, "| head -1 >", noPromoters, sep=" ")
+	cat(command,"\n")
+	try(system(command))
+	command1=paste("cat", filter.flat.file, " | sed 1d  >", noPromoters_tmp)
+	cat(command1,"\n")
+	try(system(command1))
+	command2=paste("bedtools intersect -v -a",noPromoters_tmp,"-b",tssFile, ">>",noPromoters, sep=" ")
+	cat(command2,"\n")
+	try(system(command2))
+}
+
+#getComputeCellTypeEnrichmentVariables <- function(backgroundVariants, bgOverlap, isCellType) { 
+	#cols = c("chr", "start", "end", "rsID")
+#	backgroundVariant_count = backgroundVariants+".tmp"
+#	command=paste("zcat", backgroundVariants,"| cut -f4 >", backgroundVariant_count, sep=" ")
+#	cat(command,"\n")
+#	try(system(command))
+#	
+#	bgOverlap_count = bgOverlap+".tmp"
+#	command1=paste("zcat", bgOverlap,"| cut -f4,8 >", bgOverlap_count, sep=" ")
+#	cat(command1,"\n")
+#	try(system(command1))
+#	bgVars <- fread(backgroundVariant_count, sep="\t", col.names="rsID")
+#	print(bgVars)
+#	write.table(bgVars, file="bgVars.tsv")
+#	bgVars.count <- length(bgVars)
+#
+#	if (isCellType){
+#    		min_cols = c("chr", "start", "end", "rsID", "enh-chr", "enh-start", "enh-end", "name", "CellType")
+#    		subset_cols = c("rsID", "CellType")
+##        	overlap_input = paste("zcat", bgOverlap, "| cut -f4,8", sep=" ")
+#		bgOverlap <-fread(bgOverlap_count, sep="\t", col.names=subset_cols) #, select = subset_cols)
+#        	print(bgOverlap)
+#		write.table(bgOverlap, file="bgOverlap.tsv")
+#		bgOverlap.variant.celltype.uniq <- bgOverlap %>% distinct(rsID, CellType)
+#	    	bgOverlap.variant.count <- bgOverlap.variant.celltype.uniq %>% group_by(CellType) %>% tally()
+#	} else {
+#		min_cols = c("chr", "start", "end", "rsID", "enh-chr", "enh-start", "enh-end", "name")
+#	    	subset_cols = c("rsID")
+##		overlap_input = paste("zcat", bgOverlap, "| cut -f4", sep=" ")
+#	        bgOverlap <-fread(bgOverlap_count, sep="\t", col.names=subset_cols) #, select = subset_cols)
+#	        bgOverlap.variant.celltype.uniq <- bgOverlap %>% distinct(rsID)
+#		bgOverlap.variant.count <- length(unique(bgOverlap.variant.celltype.uniq$rsID))
+#	}
+#	return(list(bgVars.count, bgOverlap.variant.count))
+#}
+
 computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type.annot, trait, cell.group.by=NULL, score.col="PosteriorProb", min.score=0.1, bg.vars=NULL, bg.overlap=NULL, noPromoter=FALSE, isCellType=TRUE, enrichment.threshold=0.001) {
   ## Computes the enrichment of variants with high vs low posterior probabilities in each cell type
   ## variants.by.cells    data.frame output by getVariantByCellsTable
@@ -154,8 +201,7 @@ computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type
     hi.vars <- variant.list$variant
   }
   
-  ##TODO: Rewrite this using interpretable variable names
-  bg_V4 <- bg.vars$V4
+  ##TODO: Rewrite this using interpretable variable names : DONE
   
   stopifnot(nrow(hi.vars) > 0)
   stopifnot(nrow(bg.vars) > 0)
@@ -164,21 +210,22 @@ computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type
   group.list <- if (!is.null(cell.group.by)) cell.type.annot[[cell.group.by]] else NULL
   if (isCellType){
   	hi.count <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.annot, variant.names=hi.vars, cell.groups=group.list)
-  	bg_V8_count <- bg.overlap %>% distinct(V4,V8)
-	bg_V8 <- bg_V8_count %>% group_by(V8) %>% tally()
-	hi.count$n.ctrl <- bg_V8$n
+#  	bg_V8_count <- bg.overlap %>% distinct(V4,V8)
+#	bg_V8 <- bg_V8_count %>% group_by(V8) %>% tally()
+#	hi.count$n.ctrl <- bg_V8$n
   } else {
 	  hi.count  <- variants.by.cells %>% filter(QueryRegionName %in% hi.vars)
 	  hi.count <- data.frame(n=length(hi.count$QueryRegionName))
-	  bg_V8 <- bg.overlap %>% distinct(V4)
-	  hi.count$n.ctrl <- length(unique(bg_V8$V4))
+#	  bg_V8 <- bg.overlap %>% distinct(V4)
+#	  hi.count$n.ctrl <- length(unique(bg_V8$V4))
   }
 #  bg.count <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.list, variant.names=bg.vars, cell.groups=group.list)
   #weighted.count <- countCellTypeOverlaps(variants.by.cells, cell.type.list=cell.type.list, variant.names=variant.list$variant, cell.groups=group.list, weightByPIP=TRUE)
 #  print(length(hi.count))
 #  print(length(bg$n))
+  hi.count$n.ctrl <- bg.overlap
   hi.count$total <- length(hi.vars)
-  hi.count$total.ctrl <- length(bg.vars$V4)
+  hi.count$total.ctrl <- bg.vars 
   hi.count$Disease <- trait
   hi.count$prop.snps <- with(hi.count, n/total)
   hi.count$enrichment <- with(hi.count, n/total / ( (n.ctrl)/total.ctrl ))

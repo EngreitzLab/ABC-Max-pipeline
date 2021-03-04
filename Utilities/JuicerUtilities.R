@@ -1,4 +1,4 @@
-## Jesse Engreitz
+#dd# Jesse Engreitz
 ## August 20, 2012
 ## R utilities
 
@@ -1919,6 +1919,20 @@ getAnnotatedGeneSet <- function(cell.type="K562", write.file=FALSE) {
   }
 }
 
+#makeTSSFile <- function(bed, outfile, genomefile) {
+#  tss_tmp = paste0(outfile, ".tmp")
+#  tssFile <- data.table(bed)[,c("chr", "tss", "tss", "name")]
+#  write.table(tssFile, file=tss_tmp, sep="\t", quote=F, row.names=FALSE, col.names=FALSE)
+#  command = paste("bedtools slop -b 250 -i", tss_tmp, "-g", genomefile, ">", outfile, sep=" ")
+#  cat(command,"\n")
+#  try(system(command))
+#
+#  #clean up tmp files 
+##  command1 = paste("rm",tss_tmp, sep=" ")
+##  cat(command1,"\n")
+##  try(system(command1))
+#}
+  
 
 addTSSToBED <- function(bed) {
   bed$tss <- bed$start

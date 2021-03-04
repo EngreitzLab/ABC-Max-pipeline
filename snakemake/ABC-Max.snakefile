@@ -19,23 +19,50 @@ trait_config_file = pd.read_table(trait_config).set_index("entry", drop=False)
 rule all:
 	input:
 #		outputSet,
+		expand(os.path.join(config["outDir"], "{pred}/geneTSS.500bp.bed"), pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.noPromoter.tsv.gz"), pred=config["predictions"]),
+                expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.noPromoter.tsv"), pred=config["predictions"]),
+                expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.noPromoter.tsv"), pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/all.bg.SNPs.noPromoter.bed.gz"), pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/bgVariants.count.tsv"), pred=config["predictions"]),
+                expand(os.path.join(config["outDir"], "{pred}/bgVariants.count.noPromoter.tsv"), pred=config["predictions"]),
+                expand(os.path.join(config["outDir"], "{pred}/bgOverlap.count.tsv"), pred=config["predictions"]),
+                expand(os.path.join(config["outDir"], "{pred}/bgOverlap.count.noPromoter.tsv"), pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand("{outdir}{pred}/{trait}/{trait}.{pred}.noPromoter.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand("{outdir}{pred}/{trait}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-		expand("{outdir}{pred}/{trait}/GenePrecisionRecall.pdf", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"])
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"), trait=config["traits"], pred=config["predictions"])
+#		expand("{outdir}{pred}/{trait}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+#		expand("{outdir}{pred}/{trait}/GenePrecisionRecall.pdf", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"])
 #		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
+
+
+rule getGeneTSS:
+        input:
+                geneList = lambda wildcard: config["predDir"]+preds_config_file.loc[wildcard.pred,"genes"]
+        output:
+                geneTSS = expand("{outdir}{{pred}}/geneTSS.500bp.bed", outdir=config["outDir"])
+        params:
+                chrSizes = config["chrSizes"]
+        run:
+
+                shell(
+                        """
+                        cat {input.geneList} | perl -lane 'if  ($F[5] == "+" ) {{print $F[0]."\t".$F[1]."\t".$F[1]."\t".$F[3]."\t".$F[4]."\t".$F[5]}} else {{print $F[0]."\t".$F[2]."\t".$F[2]."\t".$F[3]."\t".$F[4]."\t".$F[5]}}' > {output.geneTSS}.tmp
+                        bedtools slop -b 250 -i {output.geneTSS}.tmp -g {params.chrSizes} > {output.geneTSS}
+                        """)
 
 
 rule computeBackgroundOverlap:
 	input:
-		predFile = lambda wildcard: preds_config_file.loc[wildcard.pred, "predFile"],
+		predFile = lambda wildcard: config["predDir"]+preds_config_file.loc[wildcard.pred, "predFile"],
 		allVariants = config["bgVariants"],
 		chrSizes = config["chrSizes"],
 		CDS = config["CDS"]
@@ -46,7 +73,7 @@ rule computeBackgroundOverlap:
 		overallOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"),
 		overallOverlapCounts = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"),
 		noncodingOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv")
-	priority: 5
+#	priority: 5
 	log: os.path.join(config["logDir"], "{pred}.bgoverlap.log")
 	message: "Overlapping background variants with predictions: {wildcards.pred}"
 	run:
@@ -77,17 +104,52 @@ rule computeBackgroundOverlap:
 
 			# Compute fraction of noncoding variants overlapping predictions in any cell type
 			 zcat {output.overallOverlap} | bedtools intersect -v -a stdin -b {input.CDS} | cut -f 1-3,7 | sort | uniq | cut -f 4 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.noncodingOverlap}			
+			
+			""")
+
+rule computeBackgroundOverlap_noPromoters:
+	input:
+		overallOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"),
+		bgVars = config["bgVariants"],
+		CDS = config["CDS"]
+	params:
+		geneTSS = expand("{outdir}{{pred}}/geneTSS.500bp.bed", outdir=config["outDir"])	
+	output:
+		overallOverlap_noPromoter = os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.noPromoter.tsv.gz"),
+		overallOverlapCounts_noPromoter = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.noPromoter.tsv"),
+		noncodingOverlap_noPromoter = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.noPromoter.tsv"),
+		bgVars_noPromoter = os.path.join(config["outDir"], "{pred}/all.bg.SNPs.noPromoter.bed.gz")
+	run:
+		shell(
+			"""
+			set +o pipefail;
+
+			zcat {input.overallOverlap} | head -1 | gzip -c > {output.overallOverlap_noPromoter}
+			zcat {input.overallOverlap} | sed 1d > {input.overallOverlap}.tmp 
+			bedtools intersect -v -a {input.overallOverlap}.tmp -b {params.geneTSS} | gzip -c >> {output.overallOverlap_noPromoter} 
+			
+
+			# Getting the cell type column and counting
+			zcat {output.overallOverlap_noPromoter} | cut -f 7 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.overallOverlapCounts_noPromoter};
+			
+                        # Compute fraction of noncoding variants overlapping predictions in any cell type
+			zcat {output.overallOverlap_noPromoter} | bedtools intersect -v -a stdin -b {input.CDS} | cut -f 1-3,7 | sort | uniq | cut -f 4 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.noncodingOverlap_noPromoter}
+			
+			rm {input.overallOverlap}.tmp
+
+			# Remove promoter variants from bgVars 
+			zcat {input.bgVars} | bedtools intersect -v -a stdin -b {params.geneTSS} | gzip > {output.bgVars_noPromoter}
 			""")
 
 rule createVarFiles:
 	input:
-		varList = lambda wildcard: trait_config_file.loc[wildcard.trait, "varList"]
+		varList = lambda wildcard: config["traitDir"]+trait_config_file.loc[wildcard.trait, "varList"]
 	output:
 		varBed = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.bed"),
 		varBedgraph = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.bedgraph"),
-		sigvarList = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.sig.varList.tsv")
+		sigvarList = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.sig.varList.tsv"),
 	log: os.path.join(config["logDir"], "{trait}.{pred}.createbed.log")
-	priority: 4
+#	priority: 4
 	params:
 		varFilterCol = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterCol"],
 		varFilterThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterThreshold"],
@@ -134,13 +196,13 @@ rule createVarFiles:
 
 rule overlapVariants:
 	input:
-		predFile = lambda wildcard: preds_config_file.loc[wildcard.pred, "predFile"],
-		varList = lambda wildcard: trait_config_file.loc[wildcard.trait, "varList"],
-		varBed = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bed", outdir=config["outDir"]),
+		predFile = lambda wildcard: config["predDir"]+preds_config_file.loc[wildcard.pred, "predFile"],
+#		varList = lambda wildcard: trait_config_file.loc[wildcard.trait, "varList"],
+#		varBed = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bed", outdir=config["outDir"]),
 		varBedgraph = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bedgraph", outdir=config["outDir"])
 	output:
 		overlap = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"])
-	priority: 3
+#	priority: 3
 	log: os.path.join(config["logDir"], "{trait}.{pred}.overlap.log")
 	params:
 		chrSizes = config["chrSizes"]
@@ -158,23 +220,65 @@ rule overlapVariants:
 			zcat {input.predFile} | sed 1d | bedtools intersect -g {params.chrSizes} -b {input.varBedgraph} -a stdin -wb | gzip >> {output.overlap}
 			""")
 
+rule overlapVariants_noPromoter:
+	input:
+		overlap = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"])
+	params:
+		geneTSS = expand("{outdir}{{pred}}/geneTSS.500bp.bed", outdir=config["outDir"]), 
+		chrSizes = config["chrSizes"]
+	output:
+		overlap_noPromoter = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.{{pred}}.noPromoter.tsv.gz", outdir=config["outDir"])
+	run:
+		shell(
+			"""
+			set +o pipefail;
 
+			zcat {input.overlap} | head -1 | gzip > {output.overlap_noPromoter}
+			zcat {input.overlap} | sed 1d | bedtools intersect -g {params.chrSizes} -b {params.geneTSS} -a stdin | gzip >> {output.overlap_noPromoter}
+		 					
+			""")
+
+rule generateAnnotateVariantInputs:
+	input:
+		bgVars = config["bgVariants"],
+                bgVars_noPromoter = expand("{outdir}{{pred}}/all.bg.SNPs.noPromoter.bed.gz", outdir=config["outDir"]),
+                bgOverlap = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.tsv.gz", outdir=config["outDir"]),
+                bgOverlap_noPromoter = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.noPromoter.tsv.gz", outdir=config["outDir"])
+	params:
+		hasCellType = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"hasCellType"])
+	output: 
+		bgVars_count = expand("{outdir}{{pred}}/bgVariants.count.tsv", outdir=config["outDir"]),
+		bgVars_noPromoter_count = expand("{outdir}{{pred}}/bgVariants.count.noPromoter.tsv", outdir=config["outDir"]),
+		bgOverlap_count = expand("{outdir}{{pred}}/bgOverlap.count.tsv", outdir=config["outDir"]), 
+		bgOverlap_noPromoter_count = expand("{outdir}{{pred}}/bgOverlap.count.noPromoter.tsv", outdir=config["outDir"])
+	run:
+		shell(
+			"""
+			set +o pipefail;
+			zcat {input.bgVars} | cut -f4 | sort -u | wc -l > {output.bgVars_count}
+			zcat {input.bgVars_noPromoter} | cut -f4 | sort -u | wc -l > {output.bgVars_noPromoter_count}
+			zcat {input.bgOverlap} | cut -f4 | sort -u | wc -l > {output.bgOverlap_count}
+			zcat {input.bgOverlap_noPromoter} | cut -f4 | sort -u | wc -l > {output.bgOverlap_noPromoter_count}
+			""")
 rule annotateVariants:
 	input:
-		predFile = lambda wildcard: preds_config_file.loc[wildcard.pred, "predFile"],
-		varList = lambda wildcard: trait_config_file.loc[wildcard.trait, "varList"],
-		csList = lambda wildcard: trait_config_file.loc[wildcard.trait, "csList"],
+		predFile = lambda wildcard: config["predDir"]+preds_config_file.loc[wildcard.pred, "predFile"],
+		varList = lambda wildcard: config["traitDir"]+trait_config_file.loc[wildcard.trait, "varList"],
+		csList = lambda wildcard: config["traitDir"]+trait_config_file.loc[wildcard.trait, "csList"],
 		predOverlapFile = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"]),
-		bgVars = config["bgVariants"],
-		bgOverlap = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.tsv.gz", outdir=config["outDir"]) 
+		bgVars = expand("{outdir}{{pred}}/bgVariants.count.tsv", outdir=config["outDir"]),
+		bgVars_noPromoter = expand("{outdir}{{pred}}/bgVariants.count.noPromoter.tsv",
+outdir=config["outDir"]), 
+		bgOverlap = expand("{outdir}{{pred}}/bgOverlap.count.tsv", outdir=config["outDir"]), 
+		bgOverlap_noPromoter = expand("{outdir}{{pred}}/bgOverlap.count.noPromoter.tsv", outdir=config["outDir"])
 	output:
 		touch(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt")),
 		enrichFile = expand("{outdir}{{pred}}/{{trait}}/enrichment/Enrichment.CellType.vsScore.{{trait}}.tsv", outdir=config["outDir"]),
 		genePredTable = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"])
-	priority: 2
+#	priority: 2
 	log: os.path.join(config["logDir"], "{trait}.{pred}.annotate.log")
 	params:
-		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred,"celltypeAnnotation"],
+		cellTypeTable = lambda wildcard: config["predDir"]+preds_config_file.loc[wildcard.pred,"celltypeAnnotation"],
 		codeDir = config["codeDir"],
 		projectDir = config["projectDir"],
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
@@ -184,10 +288,12 @@ rule annotateVariants:
 		varScoreCol = lambda wildcard: trait_config_file.loc[wildcard.trait,"varFilterCol"],
 		varScoreType = lambda wildcard: trait_config_file.loc[wildcard.trait,"varScoreType"],
 		varScoreThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait,"varFilterThreshold"],
-		genes = lambda wildcard:preds_config_file.loc[wildcard.pred,"genes"],
-		genesUniq = lambda wildcard: preds_config_file.loc[wildcard.pred,"genesUniq"],
-		cellType = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"cellType"]),
-		isTargetGene = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"TargetGeneTSS"])
+		genes = lambda wildcard: config["predDir"]+preds_config_file.loc[wildcard.pred,"genes"],
+		genesUniq = lambda wildcard: config["predDir"]+preds_config_file.loc[wildcard.pred,"genesUniq"],
+		geneTSS = expand("{outdir}{{pred}}/geneTSS.500bp.bed", outdir=config["outDir"]),
+		hasCellType = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"hasCellType"]),
+		hasTargetGeneTSS = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"hasTargetGeneTSS"]),
+		chr_sizes = config["chrSizes"]
 	message: "Annotating {wildcards.trait} variants with {wildcards.pred} predictions"
 	run:
 		shell(
@@ -204,7 +310,9 @@ rule annotateVariants:
                 --minPredScore {params.minPredScore} \
                 --minPredScorePromoters {params.minPredScorePromoter} \
                 --backgroundVariants {input.bgVars} \
+		--backgroundVariants_noPromoter {input.bgVars_noPromoter} \
                 --bgOverlap {input.bgOverlap} \
+		--bgOverlap_noPromoter {input.bgOverlap_noPromoter} \
                 --trait {wildcards.trait} \
                 --codeDir {params.codeDir} \
                 --variantScoreCol {params.varScoreCol} \
@@ -212,8 +320,10 @@ rule annotateVariants:
                 --cellTypeTable {params.cellTypeTable} \
                 --genes {params.genes} \
                 --genesUniq {params.genesUniq} \
-                --cellType {params.cellType} \
-                --TargetGeneTSS {params.isTargetGene}
+		--geneTSS {params.geneTSS} \
+                --hasCellType {params.hasCellType} \
+                --hasTargetGeneTSS {params.hasTargetGeneTSS} \
+		--chr_sizes {params.chr_sizes}
 				""")	
 
 # Added in functionality for data filtered for promoters BUT this is only available for predictions (like ABC) that are have promoters included 
@@ -226,13 +336,11 @@ rule plotTraitEnrichment:
 		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"),
 		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.eps")
 	params:
-		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
+		cellTypeTable = lambda wildcard: config["predDir"]+preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
 		projectDir = config["projectDir"],
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
-		#cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.noPromoter.tsv"),
-	 	isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"cellType"]), 
-		#hasPromoterColumn = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasPromoter"])
-	priority: 1
+	 	isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]), 
+#	priority: 1
 	message: "Running enrichment plots"
 	run:
 		shell(
@@ -247,42 +355,32 @@ rule plotTraitEnrichment:
 			--trait {wildcards.trait} 
 			""")
 
-		if False:   ## TODO:  Rewrite this.  Make the "plot enrichment minus promoter variants" its own separate rule"
-			if {params.isCellType} and {params.hasPromoterColumn}:
-				shell(
-					"""
-					Rscript {params.projectDir}PlotCellTypeEnrichment.R \
-					--outdir {params.outDir} \
-					--outPdf {params.outfile} \
-					--outEps {params.outfile}
-					--cellTypes {params.cellTypeTable} \
-					--cellTypeEnrichments {input.cellTypeEnrichments} \
-					--codeDir {params.projectDir} \
-					--trait {wildcards.trait} 
-					
-	               	Rscript {params.projectDir}PlotCellTypeEnrichment.R \
-	               	--outdir {params.outDir} \
-	               	--cellTypes {params.cellTypeTable} \
-	               	--cellTypeEnrichments {params.cellTypeEnrichments_noPromoter} \
-	               	--codeDir {params.projectDir} \
-	               	--trait {wildcards.trait} \
-					--noPromoter TRUE 
-	                """)
-			elif {params.isCellType}:
-				shell(
-					"""
-					Rscript {params.projectDir}PlotCellTypeEnrichment.R \
-					--outdir {params.outDir} \
-	                --cellTypes {params.cellTypeTable} \
-	                --cellTypeEnrichments {input.cellTypeEnrichments} \
-	                --codeDir {params.projectDir} \
-	                --trait {wildcards.trait}
-					""")
-			else:
-				shell(
-					"""
-					echo "BAD" > {output.outfile}
-					""")
+rule plotTraitEnrichment_noPromoter:
+	input:
+		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
+	output:
+		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"),
+                outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.eps")
+	params:
+		cellTypeTable = lambda wildcard: config["predDir"]+preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
+                projectDir = config["projectDir"],
+                outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
+                isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]),
+		entry = "enrichment.NoPromoters"
+	message: "Running enrichment plots for predictions without promoters"
+	run:
+		shell(
+			"""
+			Rscript {params.projectDir}Utilities/PlotCellTypeEnrichment.R \
+			--outdir {params.outDir} \
+			--outPdf {output.outpdf} \
+			--outEps {output.outeps} \
+			--cellTypes {params.cellTypeTable} \
+			--cellTypeEnrichments {input.cellTypeEnrichments_noPromoter} \
+			--codeDir {params.projectDir} \
+			--trait {wildcards.trait} \
+			--entry {params.entry}
+			""")
 
 rule plotGenePrecisionRecall:
 	input:
