@@ -27,21 +27,21 @@ rule all:
                 expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.noPromoter.tsv"), pred=config["predictions"]),
                 expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.noPromoter.tsv"), pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/all.bg.SNPs.noPromoter.bed.gz"), pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/bgVariants.count.tsv"), pred=config["predictions"]),
-                expand(os.path.join(config["outDir"], "{pred}/bgVariants.count.noPromoter.tsv"), pred=config["predictions"]),
-                expand(os.path.join(config["outDir"], "{pred}/bgOverlap.count.tsv"), pred=config["predictions"]),
-                expand(os.path.join(config["outDir"], "{pred}/bgOverlap.count.noPromoter.tsv"), pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.bed", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.bedgraph", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.{pred}.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/{trait}.{pred}.noPromoter.tsv.gz", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{pred}/bgVariants.count.tsv"), pred=config["predictions"]),
+                expand(os.path.join(config["outDir"], "{pred}/bgVariants.count.noPromoter.tsv"), pred=config["predictions"]),
+                expand(os.path.join(config["outDir"], "{pred}/bgOverlap.count.tsv"), pred=config["predictions"]),
+                expand(os.path.join(config["outDir"], "{pred}/bgOverlap.count.noPromoter.tsv"), pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=config["traits"], pred=config["predictions"]),
 		expand("{outdir}{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=config["traits"], pred=config["predictions"]),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"), trait=config["traits"], pred=config["predictions"])
-#		expand("{outdir}{pred}/{trait}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
-#		expand("{outdir}{pred}/{trait}/GenePrecisionRecall.pdf", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"])
-#		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
+		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"), trait=config["traits"], pred=config["predictions"]),
+		expand("{outdir}{pred}/{trait}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand("{outdir}{pred}/{trait}/GenePrecisionRecall.pdf", outdir=config["outDir"], trait=config["traits"], pred=config["predictions"]),
+		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=config["traits"], pred=config["predictions"])
 
 
 rule getGeneTSS:
@@ -73,7 +73,6 @@ rule computeBackgroundOverlap:
 		overallOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"),
 		overallOverlapCounts = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"),
 		noncodingOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv")
-#	priority: 5
 	log: os.path.join(config["logDir"], "{pred}.bgoverlap.log")
 	message: "Overlapping background variants with predictions: {wildcards.pred}"
 	run:
@@ -149,7 +148,6 @@ rule createVarFiles:
 		varBedgraph = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.bedgraph"),
 		sigvarList = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.sig.varList.tsv"),
 	log: os.path.join(config["logDir"], "{trait}.{pred}.createbed.log")
-#	priority: 4
 	params:
 		varFilterCol = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterCol"],
 		varFilterThreshold = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterThreshold"],
@@ -197,12 +195,9 @@ rule createVarFiles:
 rule overlapVariants:
 	input:
 		predFile = lambda wildcard: config["predDir"]+preds_config_file.loc[wildcard.pred, "predFile"],
-#		varList = lambda wildcard: trait_config_file.loc[wildcard.trait, "varList"],
-#		varBed = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bed", outdir=config["outDir"]),
 		varBedgraph = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.bedgraph", outdir=config["outDir"])
 	output:
 		overlap = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"])
-#	priority: 3
 	log: os.path.join(config["logDir"], "{trait}.{pred}.overlap.log")
 	params:
 		chrSizes = config["chrSizes"]
@@ -257,8 +252,8 @@ rule generateAnnotateVariantInputs:
 			set +o pipefail;
 			zcat {input.bgVars} | cut -f4 | sort -u | wc -l > {output.bgVars_count}
 			zcat {input.bgVars_noPromoter} | cut -f4 | sort -u | wc -l > {output.bgVars_noPromoter_count}
-			zcat {input.bgOverlap} | cut -f4 | sort -u | wc -l > {output.bgOverlap_count}
-			zcat {input.bgOverlap_noPromoter} | cut -f4 | sort -u | wc -l > {output.bgOverlap_noPromoter_count}
+			zcat {input.bgOverlap} | cut -f4,8 | sort -u | awk '{{count[$2]++}}END{{for(j in count) print j"\t"count[j]}}' | sort -u | cut -f2 > {output.bgOverlap_count}
+			zcat {input.bgOverlap_noPromoter} | cut -f4,8 | sort -u | awk '{{count[$2]++}}END{{for(j in count) print j"\t"count[j]}}' | sort -u | cut -f2> {output.bgOverlap_noPromoter_count}
 			""")
 rule annotateVariants:
 	input:
@@ -267,15 +262,13 @@ rule annotateVariants:
 		csList = lambda wildcard: config["traitDir"]+trait_config_file.loc[wildcard.trait, "csList"],
 		predOverlapFile = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"]),
 		bgVars = expand("{outdir}{{pred}}/bgVariants.count.tsv", outdir=config["outDir"]),
-		bgVars_noPromoter = expand("{outdir}{{pred}}/bgVariants.count.noPromoter.tsv",
-outdir=config["outDir"]), 
+		bgVars_noPromoter = expand("{outdir}{{pred}}/bgVariants.count.noPromoter.tsv", outdir=config["outDir"]), 
 		bgOverlap = expand("{outdir}{{pred}}/bgOverlap.count.tsv", outdir=config["outDir"]), 
 		bgOverlap_noPromoter = expand("{outdir}{{pred}}/bgOverlap.count.noPromoter.tsv", outdir=config["outDir"])
 	output:
 		touch(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt")),
 		enrichFile = expand("{outdir}{{pred}}/{{trait}}/enrichment/Enrichment.CellType.vsScore.{{trait}}.tsv", outdir=config["outDir"]),
 		genePredTable = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"])
-#	priority: 2
 	log: os.path.join(config["logDir"], "{trait}.{pred}.annotate.log")
 	params:
 		cellTypeTable = lambda wildcard: config["predDir"]+preds_config_file.loc[wildcard.pred,"celltypeAnnotation"],

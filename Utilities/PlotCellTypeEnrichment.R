@@ -52,22 +52,21 @@ mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 45, vjust 
 {
   ibdEnhancerList <- cell.type.annot.all
   enrichPlot <- merge(cellEnrichment, cell.type.annot.all[,c("CellType","Categorical.IBDTissueAnnotations2")], by="CellType")
-  ibdEnhancerList <- merge(ibdEnhancerList, subset(enrichPlot, Disease == opt$trait)[,c("CellType", opt$entry)], by="CellType")
+  if (opt$entry == 'enrichment.NoPromoters'){
+	  print("Here")
+	  names(enrichPlot)[names(enrichPlot) == 'enrichment.NoPromoters'] <- 'enrichment'
+  }
+  ibdEnhancerList <- merge(ibdEnhancerList, subset(enrichPlot, Disease == opt$trait)[,c("CellType", "enrichment")], by="CellType")
   ibdEnhancerList$CellCat <- ordered(ibdEnhancerList$Categorical.IBDTissueAnnotations2, levels=catOrder)
   ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(cell.type.annot.all[order(cell.type.annot.all$Categorical.IBDTissueAnnotations2),"CellType"]))
-
   formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=brewer.pal(n = 8, name = "Dark2")[-5]) + ylab(paste0("Enrichment\n( ", opt$trait, " variants / all variants)"))
   
-  pdf(file=paste0(opt$outPdf), width=5, height=4)
-   
-  if (opt$entry == "enrichment.NoPromoters"){
-	  p1 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment.NoPromoters, color=CellCat)) + ggtitle("Enhancers")
-	  p1 <- p1 %>% formatEnrichmentBarPlot()
-  } else {
-  	p1 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment, color=CellCat)) + ggtitle("Enhancers") 
-  	p1 <- p1 %>% formatEnrichmentBarPlot()
-  }  
-  ggsave(paste0(opt$outEps), width=5, height=4)
+  pdf(file=opt$outPdf, width=5, height=4)
+  p1 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment, color=CellCat)) + ggtitle("Enhancers") 
+  p1 <- p1 %>% formatEnrichmentBarPlot()
+  print(p1)
+  
+  ggsave(opt$outEps, width=5, height=4)
 
   dev.off()
 }
