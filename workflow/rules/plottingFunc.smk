@@ -10,14 +10,14 @@ rule plotTraitEnrichment:
 		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.eps")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
-		projectDir = config["projectDir"],
+		codeDir = config["codeDir"],
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
 	 	isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]), 
 	message: "Running enrichment plots"
 	run:
 		shell(
 			"""
-			Rscript {params.projectDir}Utilities/PlotCellTypeEnrichment.R \
+			Rscript {params.codeDir}/PlotCellTypeEnrichment.R \
 			--outdir {params.outDir} \
 			--outPdf {output.outpdf} \
 			--outEps {output.outeps} \
@@ -35,7 +35,7 @@ rule plotTraitEnrichment_noPromoter:
                 outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.eps")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
-                projectDir = config["projectDir"],
+                codeDir = config["codeDir"],
                 outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
                 isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]),
 		entry = "enrichment.NoPromoters"
@@ -43,7 +43,7 @@ rule plotTraitEnrichment_noPromoter:
 	run:
 		shell(
 			"""
-			Rscript {params.projectDir}Utilities/PlotCellTypeEnrichment.R \
+			Rscript {params.codeDir}/PlotCellTypeEnrichment.R \
 			--outdir {params.outDir} \
 			--outPdf {output.outpdf} \
 			--outEps {output.outeps} \
@@ -62,7 +62,7 @@ rule plotFractionOverlap:
 		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.eps")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
-                projectDir = config["projectDir"],
+                codeDir = config["codeDir"],
                 outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
                 isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]),
                 entry = "enrichment"
@@ -70,7 +70,7 @@ rule plotFractionOverlap:
 	run:
 		shell(
 			"""
-                        Rscript {params.projectDir}Utilities/PlotFractionOverlap.R \
+                        Rscript {params.codeDir}/PlotFractionOverlap.R \
                         --outdir {params.outDir} \
                         --outPdf {output.outpdf} \
                         --outEps {output.outeps} \
@@ -89,7 +89,7 @@ rule plotFractionOverlap_noPromoter:
 		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.eps")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
-		projectDir = config["projectDir"],
+		codeDir = config["codeDir"],
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
 		isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]),
 		entry = "enrichment.NoPromoters"
@@ -97,7 +97,7 @@ rule plotFractionOverlap_noPromoter:
 	run:
 		shell(
 			"""
-			Rscript {params.projectDir}Utilities/PlotFractionOverlap.R \
+			Rscript {params.codeDir}/PlotFractionOverlap.R \
 			--outdir {params.outDir} \
 			--outPdf {output.outpdf} \
                         --outEps {output.outeps} \
@@ -121,7 +121,7 @@ rule plotGenePrecisionRecall:
 	run:
 		shell(
 			"""
-			Rscript {params.projectDir}Utilities/PlotGenePrecisionRecall.R \
+			Rscript {params.codeDir}/PlotGenePrecisionRecall.R \
 			--outPdf {output.prPdf} \
 			--genePredTable {input.genePredTable} \
 			--knownGenes {input.knownGenes} \
@@ -136,14 +136,14 @@ rule plotAggregate_cdf:
 		outfile = os.path.join(config["outDir"], "GWAS.{trait}.cdf.pdf"),
 		outDensity = os.path.join(config["outDir"], "GWAS.{trait}.density.pdf")
 	params:
-		projectDir = config["projectDir"],
+		codeDir = config["codeDir"],
 		predictors = all_predictions,
 		outDir = config["outDir"] 
 	message: "Plotting aggregate enrichment CDF and Density across predictions"
 	run:
 		shell(
 			"""
-			Rscript {params.projectDir}Utilities/PlotEnrichmentAggregate.R \
+			Rscript {params.codeDir}/PlotEnrichmentAggregate.R \
 			--names "{params.predictors}" \
 			--tables "{input.enrichmentFiles}" \
 			--outPdf {output.outfile} \
@@ -158,13 +158,13 @@ rule plotAggregate:
 	params:
 		predictorOfChoice = config["predictorOfChoice"],
 		predictors = all_predictions,
-		projectDir = config["projectDir"],
+		codeDir = config["codeDir"],
 		outDir = config["outDir"]
 	message: "Aggregating enrichment plots across predictors"
 	run:
 		shell(
 			"""
-			python {params.projectDir}Utilities/plot_aggregate.py \
+			python {params.codeDir}/plot_aggregate.py \
 			--traits {wildcards.trait} \
 			--predictor_of_choice {params.predictorOfChoice} \
 			--data_outdir {params.outDir} \

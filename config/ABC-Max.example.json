@@ -1,6 +1,6 @@
 {
     "projectDir": "/oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/",
-    "codeDir": "/oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/Utilities/",
+    "codeDir": "/oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/workflow/scripts/",
     "abcDir": "/oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/",
     "logDir": "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/log/",
     "outDir": "/oak/stanford/groups/akundaje/projects/ABC_links/ABC_predictions/TraitEnrichment/",

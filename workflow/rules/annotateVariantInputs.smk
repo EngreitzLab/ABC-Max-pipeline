@@ -1,6 +1,5 @@
 rule annotateVariants:
 	input:
-#		predFile = lambda wildcard: config["predDir"]+str(preds_config_file.loc[wildcard.pred, "predFile"]),
 		varList = lambda wildcard: config["traitDir"]+str(trait_config_file.loc[wildcard.trait, "varList"]),
 		csList = lambda wildcard: config["traitDir"]+str(trait_config_file.loc[wildcard.trait, "csList"]),
 		predOverlapFile = expand("{outdir}{{pred}}/{{trait}}/{{trait}}.{{pred}}.tsv.gz", outdir=config["outDir"]),
@@ -37,7 +36,7 @@ rule annotateVariants:
 	run:
 		shell(
                 """
-                Rscript {params.projectDir}/Utilities/AnnotateCredibleSets.R \
+                Rscript {params.codeDir}/AnnotateCredibleSets.R \
                 --variants {input.varList} \
                 --credibleSets {input.csList} \
                 --predictionFile {input.predOverlapFile} \
