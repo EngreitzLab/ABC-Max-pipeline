@@ -1,5 +1,5 @@
 entry	dir	varList	csList	varFilterCol	varScoreType	varFilterThreshold	varCtrlThreshold	knownGenes
-IBD	Huang2017-IBD/CredibleSets/	Huang2017-IBD/CredibleSets/IBDCombined.set1-2.variant.list.txt	Huang2017-IBD/CredibleSets/IBDCombined.set1-2.cs.txt	PosteriorProb	PP	0.1	0.01	/oak/stanford/groups/engreitz/Projects/GWAS/210208_Benchmarking/data/GeneLists.IBD.txt
+IBD	Huang2017-IBD/CredibleSets/	Huang2017-IBD/CredibleSets/IBDCombined.set1-2.variant.list.txt	Huang2017-IBD/CredibleSets/IBDCombined.set1-2.cs.txt	PosteriorProb	PP	0.1	0.01	GeneLists.IBD.txt
 CD	Huang2017-IBD/CredibleSets/	Huang2017-IBD/CredibleSets/IBD-CD.set1-2.variant.list.txt	Huang2017-IBD/CredibleSets/IBD-CD.set1-2.cs.txt	PosteriorProb	PP	0.1	0.01	
 UC	Huang2017-IBD/CredibleSets/	Huang2017-IBD/CredibleSets/IBD-UC.set1-2.variant.list.txt	Huang2017-IBD/CredibleSets/IBD-UC.set1-2.cs.txt	PosteriorProb	PP	0.1	0.01	
 LDLC	191010_UKBB_SUSIE/CredibleSetsFixed/LDLC/	191010_UKBB_SUSIE/CredibleSetsFixed/LDLC/variant.list.txt	191010_UKBB_SUSIE/CredibleSetsFixed/LDLC/all.cs.txt	PosteriorProb	PP	0.1	0.01	

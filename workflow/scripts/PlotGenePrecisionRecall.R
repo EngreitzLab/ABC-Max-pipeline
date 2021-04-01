@@ -38,15 +38,16 @@ source(paste0(opt$codeDir, "/Utilities/CredibleSetTools.R"))
 saveProgress <- function() save.image(file=paste0(opt$outPdf,".RData"))
 saveProgress()
 
-
+print("Open files")
 #######################################################################
 ## Load gene prediction files 
 
 gp <- read.delim(opt$genePredTable, check.names=F, stringsAsFactors=F, comment.char='#')
 knownGenes <- read.delim(opt$knownGenes, check.names=F, stringsAsFactors=F, comment.char='#')
-
+print(length(knownGenes))
+print(length(gp))
 predictors <- colnames(gp)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp))]
-
+print(length(predictors))
 
 
 #######################################################################

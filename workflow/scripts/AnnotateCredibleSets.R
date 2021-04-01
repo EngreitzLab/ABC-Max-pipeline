@@ -45,7 +45,7 @@ option.list <- list(
   make_option("--genesUniq", type="character", default="/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed", help="Collapsed RefSeq gene BED file used for E-G predictions"),
   make_option("--geneTSS", type="character", default="/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed", help="TSS of genes file calculated"),
   make_option("--chr_sizes", type="character", help="Chromosome sizes"),
-  # /oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/ABC-GWAS/data/CellTypes.Annotated.ABCPaper.txt
+  make_option("--isEnhancerBed", type="logical", help="Calculating enrichment of an enhancer bedfile?"),
 
   make_option("--genePredMaxDistance", type="numeric", default=1000000, help="Gene prediction table: Include genes within this distance"),
   make_option("--biosampleEnrichThreshold", type="numeric", default=0.001, help="Gene prediction and enrichment tables: Bonferroni-adjusted p-value to call biosample as significantly enriched for overlapping variants (set to 1 to include all biosamples in gene prediction table)"),
@@ -95,14 +95,11 @@ genes.tss.file = opt$geneTSS
 ## TODO: Move all of this gene processing logic somewhere else, so that the gene files input into this script are fully ready ; DONE
 genes <- readBed(opt$genes)
 genes <- addTSSToBED(genes)
-
 # Genes used in the predictions
 genes.uniq <- readBed(opt$genesUniq)
 genes.uniq <- addTSSToBED(genes.uniq)
-
 ## Only include protein-coding genes
 genes.uniq <- subset(genes.uniq, name %in% genes$name)
-
 # Housekeeping genes to ignore
 # hk.list <- read.delim(opt$housekeepingList, header=F, stringsAsFactors=F)[,1]
 
@@ -114,22 +111,20 @@ variant.list <- read.delim(opt$variants, check.names=F)
 # Finding a vector of relevant cell types
 # TODO: Requirements for this file? CellType | Categorical.IBDTissueAnnotations2
 # TODO: only use this celltype table is using the ABC predictions. Else?
-if (!is.null(opt$cellTypeTable)) {  
+if (opt$cellTypeTable != "nan") { 
   cell.type.annot <- read.delim(opt$cellTypeTable, check.names=F)
-  cell.type.list <- cell.type.annot$CellType
+#  cell.type.list <- cell.type.annot$CellType
+}
+
+if (opt$hasCellType) {
+  ## JME: This is not the best way to get this list of cell types
+  ## KSM: Updated to grab celltypes from prediction file instead
+  bgOverlap <- read.delim(opt$bgOverlap, check.names=F, header=F)
+  cell.type.list <- unique(bgOverlap$V1)
 } else {
-  if (opt$hasCellType) {
-    ## JME: This is not the best way to get this list of cell types
-    ## KSM: Updated to grab celltypes from prediction file instead
-    data <- read.delim(opt$predictionFile, check.names=F)
-    cell.type.list <- unique(data$CellType)
-  }
-  # Assuming the 8th column is where the CellType is 
-  else {
-    ## JME: I don't understand what this does?
-    ## KSM: Initializing the variable 
-    cell.type.list <- NULL
-  }
+  ## JME: I don't understand what this does?
+  ## KSM: Initializing the variable 
+  cell.type.list <- NULL
 }
 
 
@@ -216,7 +211,7 @@ dir.create(edir)
 #for (trait in unique(variant.list.filter$Disease)) {
 #  tryCatch({
 #curr.vl <- subset(variant.list.filter, Disease==trait)
-variant.by.cells <- getVariantByCellsTable(filter.flat, isCellType=opt$hasCellType)
+variant.by.cells <- getVariantByCellsTable(filter.flat, isCellType=opt$hasCellType, isEnhancerBed=opt$isEnhancerBed)
 #write.tab(variant.by.cells, file="variant.by.cells.tsv")
 ## Get Corresponding background variant, background Overlap and prediction File without regions that
 # intersect with promoters
@@ -230,7 +225,7 @@ bgOverlap_noPromoter <- read.delim(opt$bgOverlap_noPromoter, check.names=F, head
 noPromoters = paste0(opt$outbase, "data/filter.flat.noPromoters.tsv")
 getNoPromoterPredictions(filter.flat.file, noPromoters, genes.tss.file)
 variant.file.noPromoter <- read.table(noPromoters, header=T)
-variant.by.cells.noPromoter <- getVariantByCellsTable(variant.file.noPromoter, isCellType=opt$hasCellType)
+variant.by.cells.noPromoter <- getVariantByCellsTable(variant.file.noPromoter, isCellType=opt$hasCellType, isEnhancerBed=opt$isEnhancerBed)
 
 # variant.list.filter with no Promoters
 variant.list.noPromoter.file=paste0(opt$outbase, "data/variant.filter.noPromoters.tsv")
@@ -259,7 +254,7 @@ enrich <- computeCellTypeEnrichment(variant.by.cells,
                                     score.col=opt$variantScoreCol,
                                     min.score=opt$variantScoreThreshold,
                                     bg.vars=bgVars$V1,
-                                    bg.overlap=bgOverlap$V1,
+                                    bg.overlap=bgOverlap$V2,
                                     isCellType=opt$hasCellType,
                                     enrichment.threshold=opt$biosampleEnrichThreshold)
 
@@ -274,7 +269,7 @@ enrich.nopromoter <- computeCellTypeEnrichment(variant.by.cells.noPromoter,
                                                score.col=opt$variantScoreCol,
                                                min.score=opt$variantScoreThreshold, 
                                                bg.vars=bgVars_noPromoter$V1, 
-                                               bg.overlap=bgOverlap_noPromoter$V1, 
+                                               bg.overlap=bgOverlap_noPromoter$V2, 
                                                isCellType=opt$hasCellType,
                                                enrichment.threshold=opt$biosampleEnrichThreshold)
 
@@ -288,25 +283,26 @@ saveProgress()
 
 ####################################################################################
 ## Write gene predictions table
+# TODO: need to modify to run on predictions that don't have a Score column
 
-enriched.cell.types <- subset(enrich, Significant)$CellType
-
-gp.all <- getGenePrioritizationTable(
-  all.flat, 
-  all.cs, 
-  genes, 
-  genes.uniq, 
-  enriched.cell.types, 
-  cell.type.annot, 
-  score.col=opt$predScoreCol, 
-  score.min=-Inf,
-  var.score.col=opt$variantScoreCol, 
-  var.score.min=opt$variantScoreThreshold,
-  max.distance=opt$genePredMaxDistance,
-  method.name=opt$methodName)
-
-writeGenePrioritizationTable(gp.all, file=paste0(opt$outGenePredTable))
-
+#if (!opt$isEnhancerBed){
+#	enriched.cell.types <- subset(enrich, Significant)$CellType
+#	gp.all <- getGenePrioritizationTable(
+#	  all.flat, 
+#	  all.cs, 
+#	  genes, 
+#	  genes.uniq, 
+#	  enriched.cell.types, 
+#	  cell.type.annot, 
+#	  score.col=opt$predScoreCol, 
+#	  score.min=-Inf,
+#	  var.score.col=opt$variantScoreCol, 
+#	  var.score.min=opt$variantScoreThreshold,
+#	  max.distance=opt$genePredMaxDistance,
+#	  method.name=opt$methodName)
+#
+#	writeGenePrioritizationTable(gp.all, file=paste0(opt$outGenePredTable))
+#}
 saveProgress()
 
 

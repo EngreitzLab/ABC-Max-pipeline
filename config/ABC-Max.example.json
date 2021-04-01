@@ -1,22 +1,23 @@
 {
-    "projectDir": "/oak/stanford/groups/akundaje/kmualim/test/ABC-Max-pipeline/",
-    "codeDir": "/oak/stanford/groups/akundaje/kmualim/test/ABC-Max-pipeline/Utilities/",
-    "abcDir": "/oak/stanford/groups/akundaje/kmualim/test/ABC-Max-pipeline/",
+    "projectDir": "/oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/",
+    "codeDir": "/oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/Utilities/",
+    "abcDir": "/oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/",
     "logDir": "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/log/",
-    "outDir": "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_out_kristy/",
+    "outDir": "/oak/stanford/groups/akundaje/projects/ABC_links/ABC_predictions/TraitEnrichment/",
     "predDir":"/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/",
     "traitDir":"/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/",
     "chrSizes": "/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/sizes_sorted",
     "CDS": "/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/GeneCDS.bed",
     "bgVariants": "/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/all.bg.SNPs.bed.gz",
-
     "predictorOfChoice": "ABC",
     "promoterActivityRef" : "/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/GeneList.txt",
     "housekeepingList" : "/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/Human.HKGeneList.txt",
-    "predictionsTable":"/oak/stanford/groups/akundaje/kmualim/test/ABC-Max-pipeline/snakemake/ABC-Max.config-preds.tsv",
-    "traitTable":"/oak/stanford/groups/akundaje/kmualim/test/ABC-Max-pipeline/snakemake/ABC-Max.config-traits.tsv",
+    "predictionsTable":"ABC-Max.config-preds1.tsv",
+    "traitTable":"ABC-Max.config-traits.tsv",
     "predictions": [
-       "ABC"
+       "ABC",
+       "BLUEPRINT_201217-ChromHMM",
+       "EpiMap"
     ],
     "traits": [
         "IBD"

@@ -24,8 +24,8 @@ loadVariantOverlap <- function(
 
   ## Loads overlap file, and filters to variants in variant.names
   x <- read.delim(gzfile(overlap.file), check.names=F)
-  
   if (!is.null(variant.names)) {
+    variant.names <- variant.names[lapply(variant.names,length)>0]
     tmp <- data.frame(variant=factor(as.character(as.matrix(variant.names)), levels=levels(x$QueryRegionName)))
     tmp <- subset(tmp, !is.na(variant))
     x <- merge(x, tmp, by.x="QueryRegionName", by.y="variant")
@@ -41,8 +41,9 @@ loadVariantOverlap <- function(
     x$isOwnTSS <- with(x, TargetGeneTSS >= start & TargetGeneTSS <= end)
   }
   codingSymbols <- subset(genes, grepl(";NM_", name))$symbol
-  
-  x$TargetGeneIsCoding <- as.character(as.matrix(x$TargetGene)) %in% codingSymbols
+  if (c("TargetGene") %in% colnames(x)){
+  	x$TargetGeneIsCoding <- as.character(as.matrix(x$TargetGene)) %in% codingSymbols
+  }
   return(x)
 }
 
@@ -62,13 +63,13 @@ getCodingGenes <- function(genes=NULL, genes.uniq=NULL) {
 
 filterVariantOverlap <- function(overlap, predCol, cutoff, tss.cutoff, ignore.list=c()) {
   ## Implements a different cutoff for distal enhancers versus distal promoters
-  if (!is.na(cutoff)) 
+  if (!is.na(cutoff) & ("class" %in% colnames(overlap)))
     overlap <- subset(overlap, ((class != "tss" & class != "promoter") | isOwnTSS) | (get(predCol) >= tss.cutoff))
-  if (!is.na(tss.cutoff))
+  if (!is.na(tss.cutoff) & ("class" %in% colnames(overlap)))
     overlap <- subset(overlap, ((class == "tss" | class == "promoter")) | (get(predCol) >= cutoff))
-
-  overlap <- overlap %>% filter( !(TargetGene %in% ignore.list) )
-  
+  if (c("TargetGene") %in% colnames(overlap)){
+    overlap <- overlap %>% filter( !(TargetGene %in% ignore.list) )
+  }
   return(overlap)
 }
 
@@ -88,15 +89,17 @@ annotateVariantOverlaps <- function(overlap, variant.list, all.cs, var.cols=c("C
 # Changed to use score col instead of PP
 # TODO: use column name based on selection 
 # TODO: need to change isABC to score column ; modified based on assumption that E-G links
-getVariantByCellsTable <- function(overlap, score.col=NULL, isCellType=TRUE) {
-    if ( isCellType & !is.null(score.col) ) {
-  	variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), max.score.col=max(score.col), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
+getVariantByCellsTable <- function(overlap, score.col=NULL, isCellType=TRUE, isEnhancerBed=FALSE) {
+   if ( isCellType & !is.null(score.col) & !isEnhancerBed) {
+	variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), max.score.col=max(score.col), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
 	return(variant.by.cells)
   } else {
-	  if ( isCellType & is.null(score.col) ) {
+	  if ( isCellType & is.null(score.col) & !isEnhancerBed) {
 		variant.by.cells <- overlap %>% group_by(QueryRegionName,CellType) %>% summarise( n.genes=n(), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()
-	  } else if ( !isCellType & is.null(score.col) ) {
-		  variant.by.cells <- overlap %>% group_by(QueryRegionName) %>% summarise( n.genes=n(), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()}
+	  } else if (!isCellType & is.null(score.col) & !isEnhancerBed) {
+		  variant.by.cells <- overlap %>% group_by(QueryRegionName) %>% summarise( n.genes=n(), TargetGenes=paste(TargetGene,collapse=','), PosteriorProb=max(PosteriorProb) ) %>% as.data.frame()	    
+	  } else {
+		 variant.by.cells <- overlap %>% group_by(QueryRegionName) %>% summarise( n.genes=n(),PosteriorProb=max(PosteriorProb) ) %>% as.data.frame() }
 	}
 	return(variant.by.cells)
 }
@@ -216,6 +219,7 @@ computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type
   } else {
 	  hi.count  <- variants.by.cells %>% filter(QueryRegionName %in% hi.vars)
 	  hi.count <- data.frame(n=length(hi.count$QueryRegionName))
+	  hi.count$CellType <- 0
 #	  bg_V8 <- bg.overlap %>% distinct(V4)
 #	  hi.count$n.ctrl <- length(unique(bg_V8$V4))
   }
@@ -255,7 +259,7 @@ getGenePrioritizationTable <- function(
   max.distance=1000000,
   method.name="ABC") { 
 
-
+  write.table(all.cs$CredibleSet, file="cs.CredibleSet.tsv") 
   cs.tables <- list()
   for (cs.name in all.cs$CredibleSet) {
     cs.tables[[cs.name]] <- getGenePrioritizationTableForCredibleSet(
@@ -273,6 +277,7 @@ getGenePrioritizationTable <- function(
         max.distance,
         method.name)
   }
+  print(length(cs.tables))
   result <- do.call(rbind, cs.tables) 
   return(result)
 }
@@ -336,10 +341,11 @@ getGenePrioritizationTableForCredibleSet <- function(
     curr.cs$start, 
     curr.cs$end, 
     max.distance)
-
+ 
   stopifnot(length(unique(all.cs$Disease)) == 1)
-
+  write.table(cs.genes, file="cs.genes.tsv")
   gp <- subset(genes.uniq, name %in% cs.genes)
+  write.table(gp, file="gp.csv")
   gp <- gp %>% transmute(
     trait=unique(all.cs$Disease),
     CredibleSet=cs.name,
@@ -355,13 +361,17 @@ getGenePrioritizationTableForCredibleSet <- function(
     DistanceToTSSRank=rank(DistanceToTSS, ties.method="min"), 
     Distance=distance(IRanges(curr.cs$BestSNPPos,curr.cs$BestSNPPos),IRanges(start,end-1)),
     DistanceRank=rank(Distance, ties.method="min"))
-
+  write.table(gp, file="gp.new.csv")
+  write.table(all.clean, file="all.clean.tsv")
   curr.pred <- subset(all.clean, CredibleSet == cs.name)
+  write.table(curr.pred, file="curr.pred.credibleset.tsv")
   curr.pred <- subset(curr.pred, CellType %in% cell.types)
+  write.table(curr.pred, file="curr.pred.celltypes.tsv")
   curr.pred <- subset(curr.pred, TargetGene %in% genes.uniq$name)
+  write.table(curr.pred, file="curr.pred.targetgene.tsv")
   if (!is.null(score.col) & nrow(curr.pred) > 0) curr.pred <- subset(curr.pred, get(score.col) >= score.min)
   if (!is.null(var.score.col) & nrow(curr.pred) > 0) curr.pred <- subset(curr.pred, get(var.score.col) >= var.score.min)
-
+  print(nrow(curr.pred))
   if (nrow(curr.pred) > 0) {
     pred.scores <- do.call(rbind, 
       by(curr.pred, curr.pred$TargetGene, function(x) {
@@ -378,6 +388,8 @@ getGenePrioritizationTableForCredibleSet <- function(
     gp.scores[[paste0("GenePredictionMax.",method.name)]] <- !is.na(gp.scores[,paste0("GeneScore.",method.name)]) & (gp.scores[,paste0("GeneRank.",method.name)] == 1 | is.na(gp.scores[,paste0("GeneScore.",method.name)]))
 
   } else {
+    print("HERE")
+    print(nrow(curr.pred))
     gp.scores <- gp
     gp.scores[[paste0("GeneScore.",method.name)]] <- NA
     gp.scores[[paste0("CellTypes.",method.name)]] <- NA
@@ -402,16 +414,19 @@ getGenesNearCredibleSet <- function(
   cs.start, 
   cs.end, 
   max.distance) {
-
+  write.table(genes.uniq, file="genes.uniq.tsv") 
   nearby.genes <- genes.uniq %>% filter(chr == cs.chr & tss >= cs.start-max.distance & tss <= cs.end+max.distance) %>% pull(name) %>% as.matrix() %>% as.character()
+  write.table(nearby.genes, file="nearby.genes.tsv")
   abc.genes <- all.flat %>% filter(CredibleSet == cs.name)
+  write.table(abc.genes, file="abc.genes.tsv")
   if (!is.null(score.col) & nrow(abc.genes) > 0) 
     abc.genes <- subset(abc.genes, get(score.col) >= score.min)
   if (!is.null(var.score.col) & nrow(abc.genes) > 0) 
     abc.genes <- subset(abc.genes, get(var.score.col) >= var.score.min)
   abc.genes <- abc.genes$TargetGene %>% as.matrix() %>% as.character()
-
+  write.table(abc.genes, file="abc.genes.new.tsv")
   cs.genes <- unique(c(nearby.genes, abc.genes))
+  write.table(cs.genes, file="cs.genes.nearby.tsv")
   return(cs.genes)
 }
 

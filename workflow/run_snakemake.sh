@@ -9,6 +9,6 @@
 #SBATCH --error=jobid_%j.err              # File to which STDERR will be written, including job ID
 #SBATCH --output=jobid_%j.out             # File to which STDOUT will be written, including job ID
 
-source activate abc-max
+#source activate abc-max
 
 snakemake --snakefile ABC-Max.snakefile --configfile ABC-Max.example.json -j 1 --keep-target-files --rerun-incomplete --cluster "sbatch -n 1 -c 12 --mem 57G -t 2-00:00"
