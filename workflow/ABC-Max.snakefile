@@ -13,9 +13,7 @@ preds_config_file = pd.read_table(pred_config).set_index("entry", drop=False)
 trait_config_file = pd.read_table(trait_config).set_index("entry", drop=False)
 
 all_predictions = [str(pred) for pred in list(preds_config_file.index)]
-#all_predictions = "ABC"
-all_traits = "IBD"
-#all_traits = [str(trait) for trait in list(trait_config_file.index)]
+all_traits = [str(trait) for trait in list(trait_config_file.index)]
 
 # include other snakemake files 
 include: "rules/annotateVariantInputs.smk"
@@ -47,10 +45,10 @@ rule all:
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"), trait=all_traits, pred=all_predictions),
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.pdf"), trait=all_traits, pred=all_predictions),
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.pdf"), trait=all_traits, pred=all_predictions),
-		expand("{outdir}{pred}/{trait}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"], trait=all_traits, pred=all_predictions),
+#		expand("{outdir}{pred}/{trait}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"], trait=all_traits, pred=all_predictions),
 #		expand("{outdir}{pred}/{trait}/GenePrecisionRecall.pdf", outdir=config["outDir"], trait=all_traits, pred=all_predictions),
-#		expand(os.path.join(config["outDir"], "GWAS.{trait}.cdf.pdf"), trait=all_traits), 
-#		expand(os.path.join(config["outDir"], "GWAS.{trait}.density.pdf"), trait=all_traits),
-#		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=all_traits, pred=all_predictions)
+		expand(os.path.join(config["outDir"], "GWAS.{trait}.cdf.pdf"), trait=all_traits), 
+		expand(os.path.join(config["outDir"], "GWAS.{trait}.density.pdf"), trait=all_traits),
+		expand(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), trait=all_traits, pred=all_predictions)
 
 
