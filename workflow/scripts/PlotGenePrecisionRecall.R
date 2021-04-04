@@ -32,8 +32,8 @@ checkInputs <- function(opt) {
 }
 checkInputs(opt)
 
-source(paste0(opt$codeDir, "/Utilities/JuicerUtilities.R"))
-source(paste0(opt$codeDir, "/Utilities/CredibleSetTools.R"))
+source(paste0(opt$codeDir, "/JuicerUtilities.R"))
+source(paste0(opt$codeDir, "/CredibleSetTools.R"))
 
 saveProgress <- function() save.image(file=paste0(opt$outPdf,".RData"))
 saveProgress()

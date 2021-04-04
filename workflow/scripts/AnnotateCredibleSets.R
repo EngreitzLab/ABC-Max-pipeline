@@ -285,24 +285,24 @@ saveProgress()
 ## Write gene predictions table
 # TODO: need to modify to run on predictions that don't have a Score column
 
-#if (!opt$isEnhancerBed){
-#	enriched.cell.types <- subset(enrich, Significant)$CellType
-#	gp.all <- getGenePrioritizationTable(
-#	  all.flat, 
-#	  all.cs, 
-#	  genes, 
-#	  genes.uniq, 
-#	  enriched.cell.types, 
-#	  cell.type.annot, 
-#	  score.col=opt$predScoreCol, 
-#	  score.min=-Inf,
-#	  var.score.col=opt$variantScoreCol, 
-#	  var.score.min=opt$variantScoreThreshold,
-#	  max.distance=opt$genePredMaxDistance,
-#	  method.name=opt$methodName)
-#
-#	writeGenePrioritizationTable(gp.all, file=paste0(opt$outGenePredTable))
-#}
+if (!opt$isEnhancerBed){
+	enriched.cell.types <- subset(enrich, Significant)$CellType
+	gp.all <- getGenePrioritizationTable(
+	  all.flat, 
+	  all.cs, 
+	  genes, 
+	  genes.uniq, 
+	  enriched.cell.types, 
+	  cell.type.annot, 
+	  score.col=opt$predScoreCol, 
+	  score.min=opt$minPredScore,
+	  var.score.col=opt$variantScoreCol, 
+	  var.score.min=opt$variantScoreThreshold,
+	  max.distance=opt$genePredMaxDistance,
+	  method.name=opt$methodName)
+
+	writeGenePrioritizationTable(gp.all, file=paste0(opt$outGenePredTable))
+}
 saveProgress()
 
 

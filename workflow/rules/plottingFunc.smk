@@ -23,7 +23,7 @@ rule plotTraitEnrichment:
 			--outEps {output.outeps} \
 			--cellTypes {params.cellTypeTable} \
 			--cellTypeEnrichments {input.cellTypeEnrichments} \
-			--codeDir {params.projectDir} \
+			--codeDir {params.codeDir} \
 			--trait {wildcards.trait} 
 			""")
 
@@ -49,7 +49,7 @@ rule plotTraitEnrichment_noPromoter:
 			--outEps {output.outeps} \
 			--cellTypes {params.cellTypeTable} \
 			--cellTypeEnrichments {input.cellTypeEnrichments_noPromoter} \
-			--codeDir {params.projectDir} \
+			--codeDir {params.codeDir} \
 			--trait {wildcards.trait} \
 			--entry {params.entry}
 			""")
@@ -76,7 +76,7 @@ rule plotFractionOverlap:
                         --outEps {output.outeps} \
                         --cellTypes {params.cellTypeTable} \
                         --cellTypeEnrichments {input.cellTypeEnrichments_noPromoter} \
-                        --codeDir {params.projectDir} \
+                        --codeDir {params.codeDir} \
                         --trait {wildcards.trait} \
                         --entry {params.entry}
                         """)
@@ -103,7 +103,7 @@ rule plotFractionOverlap_noPromoter:
                         --outEps {output.outeps} \
                         --cellTypes {params.cellTypeTable} \
                         --cellTypeEnrichments {input.cellTypeEnrichments_noPromoter} \
-                        --codeDir {params.projectDir} \
+                        --codeDir {params.codeDir} \
                         --trait {wildcards.trait} \
                         --entry {params.entry}
 			""")
@@ -125,7 +125,7 @@ rule plotGenePrecisionRecall:
 			--outPdf {output.prPdf} \
 			--genePredTable {input.genePredTable} \
 			--knownGenes {input.knownGenes} \
-			--codeDir {params.projectDir}
+			--codeDir {params.codeDir}
 			""")
 
 

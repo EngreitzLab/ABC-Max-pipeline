@@ -11,4 +11,4 @@
 
 #source activate abc-max
 
-snakemake --snakefile ABC-Max.snakefile --configfile ABC-Max.example.json -j 1 --keep-target-files --rerun-incomplete --cluster "sbatch -n 1 -c 12 --mem 57G -t 2-00:00"
+snakemake --snakefile ABC-Max.snakefile --configfile ../config/ABC-Max.example.json -j 1 --keep-target-files --rerun-incomplete --cluster "sbatch -n 1 -c 12 --mem 57G -t 2-00:00"

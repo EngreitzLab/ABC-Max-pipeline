@@ -12,8 +12,8 @@
     "predictorOfChoice": "ABC",
     "promoterActivityRef" : "/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/GeneList.txt",
     "housekeepingList" : "/oak/stanford/groups/akundaje/projects/ABC_links/GWAS_test/Test_data/Human.HKGeneList.txt",
-    "predictionsTable":"ABC-Max.config-preds1.tsv",
-    "traitTable":"ABC-Max.config-traits.tsv",
+    "predictionsTable":"/oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/config/ABC-Max.config-preds1.tsv",
+    "traitTable":"/oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/config/ABC-Max.config-traits.tsv",
     "predictions": [
        "ABC",
        "BLUEPRINT_201217-ChromHMM",

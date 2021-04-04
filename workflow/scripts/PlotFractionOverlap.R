@@ -27,8 +27,8 @@ suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(gtools))
 suppressPackageStartupMessages(library(cowplot))
 
-source(paste0(opt$codeDir, "/Utilities/JuicerUtilities.R"))
-source(paste0(opt$codeDir, "/Utilities/CredibleSetTools.R"))
+source(paste0(opt$codeDir, "/JuicerUtilities.R"))
+source(paste0(opt$codeDir, "/CredibleSetTools.R"))
 
 setwd(opt$outdir)
 save.image(file=paste0(opt$outdir, "/PlotCellTypeEnrichment.RData"))
