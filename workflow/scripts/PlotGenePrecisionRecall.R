@@ -26,7 +26,11 @@ suppressPackageStartupMessages(library(RColorBrewer))
 ## Check inputs
 
 checkInputs <- function(opt) {
-  if (!file.exists(opt$genePredTable)) stop(paste0("Gene prediction file does not exist: ", opt$genePredictionTable))
+  names = strsplit(opt$genePredTable, " ") %>% unlist()
+  print(names)
+  for (k in 1:length(names)){
+      if (!file.exists(names[k])) stop(paste0("Gene prediction file does not exist: ", names[k]))
+  }
   if (!file.exists(opt$knownGenes)) stop(paste0("Known genes file does not exist: ", opt$knownGenes))
   if (!file.exists(opt$codeDir)) stop(paste0("Pipeline code directory does not exist: ", opt$codeDir))
 }
@@ -42,7 +46,19 @@ print("Open files")
 #######################################################################
 ## Load gene prediction files 
 
-gp <- read.delim(opt$genePredTable, check.names=F, stringsAsFactors=F, comment.char='#')
+names = strsplit(opt$genePredTable, " ") %>% unlist()
+# aggregate data 
+gp <- read.delim(names[1], check.names=F, stringsAsFactors=F, comment.char='#')
+
+# merge cols
+mergecols <- colnames(gp[, 1:10])
+print(mergecols)
+
+for (i in 2:length(names)){
+	temp = read.delim(file=names[i], check.names=F, stringsAsFactors=F, comment.char='#')
+	gp = merge(gp, temp, by=mergecols)
+}
+
 knownGenes <- read.delim(opt$knownGenes, check.names=F, stringsAsFactors=F, comment.char='#')
 print(length(knownGenes))
 print(length(gp))

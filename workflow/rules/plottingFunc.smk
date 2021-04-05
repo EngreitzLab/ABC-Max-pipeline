@@ -108,9 +108,9 @@ rule plotFractionOverlap_noPromoter:
                         --entry {params.entry}
 			""")
 
-rule plotGenePrecisionRecall:
+rule plotIndividualGenePrecisionRecall:
 	input:
-		genePredTable = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"]),
+		genePredTable = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.tsv",outdir=config["outDir"]),
 		knownGenes = lambda wildcard: str(config["predDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
 	output:
 		prPdf = os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf")
@@ -118,12 +118,32 @@ rule plotGenePrecisionRecall:
 		codeDir = config["codeDir"],
 		projectDir = config["projectDir"]
 	message: "Running precision-recall plot for {wildcards.trait} and {wildcards.pred} predictions"
+        run:
+                shell(
+			"""
+			Rscript {params.codeDir}/PlotGenePrecisionRecall.R \
+                        --outPdf {output.prPdf} \
+                        --genePredTable {input.genePredTable} \
+                        --knownGenes {input.knownGenes} \
+                        --codeDir {params.codeDir}
+                        """)
+
+rule plotGenePrecisionRecall:
+	input:
+		genePredTable = expand("{outdir}{pred}/{{trait}}/GenePredictions.allCredibleSets.tsv", pred=all_predictions, outdir=config["outDir"]),
+		knownGenes = lambda wildcard: str(config["predDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
+	output:
+		prPdf = os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf")
+	params:
+		codeDir = config["codeDir"],
+		projectDir = config["projectDir"]
+	message: "Running precision-recall plot for {wildcards.trait} across all predictions"
 	run:
 		shell(
 			"""
 			Rscript {params.codeDir}/PlotGenePrecisionRecall.R \
 			--outPdf {output.prPdf} \
-			--genePredTable {input.genePredTable} \
+			--genePredTable "{input.genePredTable}" \
 			--knownGenes {input.knownGenes} \
 			--codeDir {params.codeDir}
 			""")
