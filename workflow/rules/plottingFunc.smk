@@ -8,7 +8,7 @@ rule plotTraitEnrichment:
 	output:
 #		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"),
 		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.eps"),
-		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), caption="report/CellTypeEnrichment.rst", category="Trait Enrichment Plots", subcategory="{trait}/{pred}")
+		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), caption="../report/CellTypeEnrichment.rst", category="Trait Enrichment Plots", subcategory="{trait}/{pred}")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
 		codeDir = config["codeDir"],
@@ -34,7 +34,7 @@ rule plotTraitEnrichment_noPromoter:
 	output:
 #		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"),
                 outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.eps"),
-		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"), caption="report/CellTypeEnrichment.noPromoter.rst", category="Trait Enrichment Plots", subcategory="{trait}/{pred}")
+		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"), caption="../report/CellTypeEnrichment.noPromoter.rst", category="Trait Enrichment Plots", subcategory="{trait}/{pred}")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
                 codeDir = config["codeDir"],
@@ -62,7 +62,7 @@ rule plotFractionOverlap:
 	output:
 #		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.pdf"),
 		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.eps"),
-		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.pdf"), caption="report/CellTypeOverlap.rst", category="Fraction Enhancer Overlap", subcategory="{trait}/{pred}")
+		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.pdf"), caption="../report/CellTypeOverlap.rst", category="Fraction Enhancer Overlap", subcategory="{trait}/{pred}")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
                 codeDir = config["codeDir"],
@@ -90,7 +90,7 @@ rule plotFractionOverlap_noPromoter:
 	output:
 #		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.pdf"),
 		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.eps"),
-		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.pdf"), caption="report/CellTypeOverlap.noPromoter.rst", category="Fraction Enhancer Overlap", subcategory="{trait}/{pred}")
+		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.pdf"), caption="../report/CellTypeOverlap.noPromoter.rst", category="Fraction Enhancer Overlap", subcategory="{trait}/{pred}")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
 		codeDir = config["codeDir"],
@@ -118,7 +118,7 @@ rule plotIndividualGenePrecisionRecall:
 		knownGenes = lambda wildcard: str(config["predDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
 	output:
 #		prPdf = os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf"),
-		prPdf = report(os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf"), caption="report/GenePrecisionRecall.rst", category="Precision and Recall", subcategory="{trait}/{pred}")
+		prPdf = report(os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf"), caption="../report/GenePrecisionRecall.rst", category="Precision and Recall", subcategory="{trait}/{pred}")
 	params:
 		codeDir = config["codeDir"],
 		projectDir = config["projectDir"]
@@ -139,7 +139,7 @@ rule plotGenePrecisionRecall:
 		knownGenes = lambda wildcard: str(config["predDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
 	output:
 #		prPdf = os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"),
-		prPdf = report(os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"), caption="report/GenePrecisionRecall.Agg.rst", category="Precision and Recall", subcategory="{trait}")
+		prPdf = report(os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"), caption="../report/GenePrecisionRecall.Agg.rst", category="Precision and Recall", subcategory="{trait}")
 	params:
 		codeDir = config["codeDir"],
 		projectDir = config["projectDir"]
@@ -160,8 +160,8 @@ rule plotAggregate_cdf:
 		enrichmentFiles = expand("{outdir}{pred}/{{trait}}/enrichment/Enrichment.CellType.vsScore.{{trait}}.tsv", outdir=config['outDir'], pred=all_predictions)
 	output:
 #		outfile = os.path.join(config["outDir"], "GWAS.{trait}.cdf.pdf"),
-		outDensity = report(os.path.join(config["outDir"], "GWAS.{trait}.density.pdf"), caption="report/GWAS.density.rst", category="Enrichment Density Plots", subcategory="{trait}"),
-		outfile = report(os.path.join(config["outDir"], "GWAS.{trait}.cdf.pdf"), caption="report/GWAS.cdf.rst", category="Enrichment Density Plots", subcategory="{trait}")
+		outDensity = report(os.path.join(config["outDir"], "GWAS.{trait}.density.pdf"), caption="../report/GWAS.density.rst", category="Enrichment Density Plots", subcategory="{trait}"),
+		outfile = report(os.path.join(config["outDir"], "GWAS.{trait}.cdf.pdf"), caption="../report/GWAS.cdf.rst", category="Enrichment Density Plots", subcategory="{trait}")
 	params:
 		codeDir = config["codeDir"],
 		predictors = all_predictions,
@@ -182,7 +182,7 @@ rule plotAggregate_cdf:
 rule plotAggregate:
 	output:
 #		outfile = os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"),
-		outfile = report(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), caption="report/ComparativeAggregatePlots.rst", category="Comparison Plots")
+		outfile = report(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), caption="../report/ComparativeAggregatePlots.rst", category="Comparison Plots")
 	params:
 		predictorOfChoice = config["predictorOfChoice"],
 		predictors = all_predictions,
