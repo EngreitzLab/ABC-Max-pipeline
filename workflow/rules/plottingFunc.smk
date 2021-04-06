@@ -139,7 +139,7 @@ rule plotGenePrecisionRecall:
 		knownGenes = lambda wildcard: str(config["predDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
 	output:
 #		prPdf = os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"),
-		prPdf = report(os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"), caption="report/GenePrecisionRecall.rst", category="Precision and Recall", subcategory="{trait}")
+		prPdf = report(os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"), caption="report/GenePrecisionRecall.Agg.rst", category="Precision and Recall", subcategory="{trait}")
 	params:
 		codeDir = config["codeDir"],
 		projectDir = config["projectDir"]
