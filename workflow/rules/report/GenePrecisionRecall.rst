@@ -1,0 +1,3 @@
+Precision versus recall for {pred} to connect noncoding {trait} credible sets to known {trait} disease genes.  Precision = fraction of identified genes corresponding to known genes. Recall = fraction of the known genes identified. Plot represents the performance of choosing the gene with the best score per locus, which outperforms selecting all genes above a global threshold. 
+
+Two methods present in this plot are Closest TSS and Distance. 

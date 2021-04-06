@@ -1,0 +1,1 @@
+Enrichment of fine-mapped {trait} variants (PIP >= 10%) in {pred} enhancers (left) in all biosamples present. Generally, the observation should be that {pred} enhancers located in cell Categories linked to the {trait} should show higher enrichment values than other cell categories.  
