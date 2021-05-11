@@ -1,0 +1,390 @@
+---
+title: "Properties of lists"
+author: "Kristy Mualim" 
+date: "04/15/2021"
+output:
+    html_document:
+       toc: true
+---
+
+```{css echo=FALSE}
+.main-container {
+  max-width: 1600px;
+    margin-left: auto;
+      margin-right: auto;
+}
+```
+
+```{r setup, include=FALSE}
+# load required functions and packages
+library(here)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(plotly)
+library(stringr)
+library(cowplot)
+library(gtools)
+library(viridis)
+library(RColorBrewer)
+library(DT)
+library(htmltools)
+library(reactable)
+library(patchwork)
+# set global chunk options
+knitr::opts_chunk$set(echo = FALSE)
+
+#source(paste0(snakemake@params$codeDir, "JuicerUtilities.R"))
+#source(paste0(snakemake@params$codeDir, "CredibleSetTools.R"))
+
+# get input arguments 
+# make these variables more intuitive
+# these prediction files read in chr, start, end , log2(DHS), log2(H3K27ac)
+all_predictors = strsplit(snakemake@input$enhancerPredictions, " ") %>% unlist()
+# these are the lists of predictions
+lists_of_predictions = strsplit(snakemake@params$allpredictions, " ") %>% unlist()
+# these candidate region files read in chr, start, end, log2(DHS), log2(H3K27ac)
+candidateRegions = strsplit(snakemake@input$candidateRegions, " ") %>% unlist()
+# Number of Enhancer Gene Connections 
+numEnhancerGeneConnectionsFile = strsplit(snakemake@input$numEGCounts, " ") %>% unlist()
+# read in original prediction files with chr, start, end, TargetGene, etc
+#origPredictionFiles = strsplit(snakemake@input$predFiles, " ") %>% unlist()
+# read in merged Enhancer files with chr, start, end, TargetGene, numGenes, Celltypes, numCelltypes
+mergedPredictionFiles = strsplit(snakemake@input$mergeEnhancerRegions, " ") %>% unlist()  
+# read in number biosample counts 
+numBiosamplesCounts = strsplit(snakemake@input$numBiosamplesCounts, " ") %>% unlist()
+numUniqueBP = strsplit(snakemake@input$totalUniquebp, " ") %>% unlist()
+numGenes = strsplit(snakemake@input$numGenes, " ") %>% unlist()
+num_examples = 1000
+```
+
+```{r plottingWidthEnhancers, echo=FALSE, error=FALSE, message=FALSE,  warnings=FALSE}
+########### DESCRIPTION ###########
+# This function takes in *.Enrichment.vsScore.tsv files and outputs enrichment bar plots across different cell categories as defined by catOrder 
+predictionFile <- read.delim(all_predictors[1], sep = "\t", header=FALSE, check.names=F, stringsAsFactors=F, row.names=NULL)
+predictionFile$chr <- predictionFile[1]
+predictionFile$start <- predictionFile[2]
+predictionFile$end <- predictionFile[3]
+predictionFile$width <- predictionFile['end'] - predictionFile['start']
+predictionFile$Method <- lists_of_predictions[1]
+predictionFile$DHS <- log2(predictionFile[4]+1)
+predictionFile$H3K27ac <- log2(predictionFile[5]+1)
+predictionFile$CellType <- predictionFile[6]
+predictionFile <- predictionFile %>% dplyr::select(chr, start, end, width, Method, DHS, H3K27ac, CellType)
+subset_predictionFile <- sample_n(predictionFile, size=1000)
+
+numEnhancers <- predictionFile %>% group_by(CellType) %>% tally()
+numEnhancers <- data.frame(n=numEnhancers$n, Method=lists_of_predictions[1])
+
+if (length(all_predictors) > 1){
+	for (i in 2:length(all_predictors)){
+		tryCatch({
+                        temp = read.delim(file=all_predictors[i], sep='\t', header=FALSE, check.names=F, stringsAsFactors = F, row.names=NULL)
+			temp$chr <- temp[1]
+			temp$start <- temp[2]
+			temp$end <- temp[3]
+			temp$width <- temp['end'] - temp['start']
+			temp$Method <- lists_of_predictions[i]
+			temp$DHS <- log2(temp[4]+1)
+			temp$H3K27ac <- log2(temp[5]+1)
+			temp$CellType <- temp[6]
+			temp <- temp %>% dplyr::select(chr, start, end, width, Method, DHS, H3K27ac, CellType)
+			temp_numEnhancers <- temp %>% group_by(CellType) %>% tally()
+			temp_numEnhancers <- data.frame(n=temp_numEnhancers$n, Method=lists_of_predictions[i])
+			subset_temp <- sample_n(temp, size=1000)
+			subset_predictionFile = rbind(subset_predictionFile, subset_temp)
+			numEnhancers = rbind(numEnhancers, temp_numEnhancers)
+		},
+                error=function(cond) {
+                        message(paste("File does not exist::", i))
+                },
+                finally={
+                        message(paste("Processed:",i))
+                })
+	}
+}
+
+
+# Set theme of plots
+mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1), axis.text=element_text(size=13))#, axis.text = element_text(size = 13), axis.title = element_text(size = 15))
+
+formatEnrichmentBarPlot <- function(p) p + geom_boxplot(outlier.shape = NA) + mytheme + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=15), legend.position='none')
+#formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=10), legend.position='none') + geom_boxplot(outlier.shape = NA)
+subset_predictionFile$width <- unlist(subset_predictionFile$width)
+widthPlot <- ggplot(subset_predictionFile, aes(x=Method, y=width, fill=Method)) + ylab(paste0("Width of enhancer regions")) + labs(title=paste0("Width of enhancer regions across all predictions")) + xlab("Prediction Method") + ylim(0, max(subset_predictionFile$width))
+widthPlot <- widthPlot %>% formatEnrichmentBarPlot()
+# figure caption
+widthPlotly <- ggplotly(widthPlot)
+```
+
+```{r plottingNumEnhancers, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+subset_predictionFile$n <- unlist(subset_predictionFile$n)
+numPlot <- ggplot(numEnhancers, aes(x=Method, y=n, fill=Method)) + ylab(paste0("Number of enhancers")) + labs(title=paste0("Number of enhancers across all biosamples")) + xlab("Prediction Method") + ylim(0, max(numEnhancers$n))
+numPlot <- numPlot %>% formatEnrichmentBarPlot()
+
+numPlotly <- ggplotly(numPlot)
+```
+```{r plottingAccessibility, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+subset_predictionFile$DHS <- unlist(subset_predictionFile$DHS)
+accessibility <- ggplot(subset_predictionFile, aes(x=Method, y=DHS, fill=Method)) + ylab(paste0("log2(DNase) of enhancers")) + labs(title=paste0("Accessibility of enhancers across all biosamples")) + xlab("Prediction Method") + ylim(0, max(subset_predictionFile$DHS))
+accessibility <- accessibility %>% formatEnrichmentBarPlot()
+
+accessibilityplotly <- ggplotly(accessibility)
+```
+```{r plottingAcetylation , echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+subset_predictionFile$H3K27ac <- unlist(subset_predictionFile$H3K27ac)
+acetylation <- ggplot(subset_predictionFile, aes(x=Method, y=H3K27ac, fill=Method)) + ylab(paste0("log2(H3K27ac) of enhancers")) + labs(title=paste0("Acetylation of enhancers across all biosamples")) + xlab("Prediction Method") + ylim(0, max(subset_predictionFile$DHS))
+acetylation <- acetylation %>% formatEnrichmentBarPlot()
+
+acetylationplotly <- ggplotly(acetylation)
+```
+
+## Statistics for candidate regions 
+```{r plottingFractionOverlap, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+candidateFile <- read.delim(candidateRegions[1], sep = "\t", header=FALSE, check.names=F, stringsAsFactors=F, row.names=NULL)
+
+# rename columns of candidate File 
+candidateFile$chr <- candidateFile[1]
+candidateFile$start <- candidateFile[2]
+candidateFile$end <- candidateFile[3]
+candidateFile$width <- candidateFile['end'] - candidateFile['start']
+candidateFile$Method <- lists_of_predictions[1]
+candidateFile$DHS <- log2(candidateFile[4]+1)
+candidateFile$H3K27ac <- log2(candidateFile[5]+1)
+candidateFile$CellType <- candidateFile[6]
+candidateFile <- candidateFile %>% dplyr::select(chr, start, end, width, Method, DHS, H3K27ac, CellType)
+subset_candidateFile <- sample_n(candidateFile, size=1000)
+print("Prediction File")
+numCandidate <- predictionFile %>% group_by(CellType) %>% tally()
+numCandidate <- data.frame(n=numCandidate$n, Method=lists_of_predictions[1])
+print("Num Candidate Regions")
+if (length(candidateRegions) > 1){
+	for (i in 2:length(candidateRegions)){
+		tryCatch({
+	       		temp = read.delim(file=candidateRegions[i], sep='\t', header=TRUE, stringsAsFactors = FALSE)
+			temp$chr <- temp[1]
+			temp$start <- temp[2]
+			temp$end <- temp[3]
+			temp$width <- temp['end'] - temp['start']
+			temp$Method <- lists_of_predictions[i]
+			temp$DHS <- log2(temp[4]+1)
+			temp$H3K27ac <- log2(temp[5]+1)
+			temp$CellType <- temp[6]
+			temp <- temp %>% dplyr::select(chr, start, end, width, Method, DHS, H3K27ac, CellType)
+			print("temp")
+			temp_numCandidate <- temp %>% group_by(CellType) %>% tally()
+			temp_numCandidate <- data.frame(n=temp_numCandidate$n, Method=lists_of_predictions[i])
+			print("temp_numEnhancers")
+			subset_temp <- sample_n(temp, size=1000)
+			subset_candidateFile = rbind(subset_candidateFile, subset_temp)
+			numCandidate = rbind(numCandidate, temp_numCandidate)
+			print("subset")
+		},
+		error=function(cond) {
+			message(paste("File does not exist::", i))
+		},
+		finally={
+			message(paste("Processed:",i))
+		})
+	}
+}
+
+# Grab candiadte region widths 
+subset_candidateFile$width <- unlist(subset_candidateFile$width)
+CandidatewidthPlot <- ggplot(subset_candidateFile, aes(x=Method, y=width, fill=Method)) + ylab(paste0("Width (bp) of candidate regions")) + labs(title=paste0("Width of candidate regions across all predictions")) + xlab("Prediction Method") + ylim(0, max(subset_candidateFile$width))
+CandidatewidthPlot <- CandidatewidthPlot %>% formatEnrichmentBarPlot()
+# figure caption
+CandidatewidthPlotly <- ggplotly(CandidatewidthPlot)
+```
+
+```{r plottingCandidateNumEnhancers, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+subset_candidateFile$n <- unlist(subset_candidateFile$n)
+numCandidatePlot <- ggplot(numCandidate, aes(x=Method, y=n, fill=Method)) + ylab(paste0("Number of candidate regions")) + labs(title=paste0("Number of candidate regions across all biosamples")) + xlab("Prediction Method") + ylim(0, max(numCandidate$n))
+numCandidatePlot <- numCandidatePlot %>% formatEnrichmentBarPlot()
+
+numCandidatePlotly <- ggplotly(numCandidatePlot)
+```
+```{r plottingCandidateAccessibility, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+subset_candidateFile$DHS <- unlist(subset_candidateFile$DHS)
+Candidate_accessibility <- ggplot(subset_candidateFile, aes(x=Method, y=DHS, fill=Method)) + ylab(paste0("log2(DNase) of candidate regions")) + labs(title=paste0("Accessibility of candidate regions across all biosamples")) + xlab("Prediction Method") + ylim(0, max(subset_candidateFile$DHS))
+Candidate_accessibility <- Candidate_accessibility %>% formatEnrichmentBarPlot()
+
+Candidate_accessibilityplotly <- ggplotly(Candidate_accessibility)
+```
+```{r plottingCandidateAcetylation , echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+subset_candidateFile$H3K27ac <- unlist(subset_candidateFile$H3K27ac)
+Candidate_acetylation <- ggplot(subset_candidateFile, aes(x=Method, y=H3K27ac, fill=Method)) + ylab(paste0("log2(H3K27ac) of candidate regions")) + labs(title=paste0("Acetylation of candidate regions across all biosamples")) + xlab("Prediction Method") + ylim(0, max(subset_candidateFile$DHS))
+Candidate_acetylation <- Candidate_acetylation %>% formatEnrichmentBarPlot()
+
+Candidate_acetylationplotly <- ggplotly(Candidate_acetylation)
+```
+
+## Summary of `r snakemake@wildcards$pred` for `r snakemake@wildcards$trait` traits
+#This report shows summary statistics for predictions made by **`r snakemake@wildcards$pred`**. <br> It seeks to give an overview of the properties of the candidate enhancer regions, enhancer regions in the prediction method of choice. This will give us  better understanding of why certain methods might perform better under different validation strategies. Some of these statistics include: <br>
+1. Number / Width / log2(DNase) / log2(H3K27ac) of Candidate enhancer regions <br>
+2. Number / Width / log2(DNase) / log2(H3K27ac) of enhancer regions <br>
+
+```{r summary,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+
+CandidatewidthPlot <- CandidatewidthPlot + ggtitle('A')
+numCandidatePlot <- numCandidatePlot + ggtitle('B')
+Candidate_accessibilityplot <- Candidate_acetylation+ ggtitle('C')
+Candidate_acetylationplot<- Candidate_acetylation+ ggtitle('D')
+
+widthPlot <- widthPlot + ggtitle('E') 
+numPlot <- numPlot + ggtitle('F') 
+accessibilityplot <- accessibility+ ggtitle('G') 
+acetylationplot <- acetylation+ ggtitle('H')
+
+#plot_grid(CandidatewidthPlot, numCandidatePlot, Candidate_accessibilityplot, Candidate_acetylationplot
+patchwork <- ( CandidatewidthPlot + numCandidatePlot + Candidate_accessibilityplot + Candidate_acetylationplot ) / ( widthPlot + numPlot + accessibilityplot + acetylationplot )
+patchwork
+
+```
+
+<br>
+**Fig1. `r snakemake@wildcards$pred` maps connecting fine-mapped variants to enhancer, genes and celltypes.** First row shows the summary statistics of candidate enhancer regions for all predictors across all biosamples. Second row shows the summary statistics of enhancer regions for all predictors across all biosamples. **a**, Width of candidate enhancer regions (bp) across all biosamples. **b**, Number of candidate enhancer regions across all biosamples. **c**, log2(DNase) counts of candidate enhancer regions across all biosamples. **d**, log2(H3K27ac) counts of candidate enhancer regions across all biosamples. **e**, Width of enhancer regions (bp) across all biosamples. **f**, Number of enhancer regions across all biosamples. **g**, log2(DNase) counts of enhancer regions across all biosamples. **h**, log2(H3K27ac) counts of enhancer regions across all biosamples.
+
+```{r cdfCandidate, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+subset_candidateFile = subset_candidateFile[order(subset_candidateFile$width),]
+cdfWidth = ggplot(subset_candidateFile, aes(width, col=Method)) + 
+	stat_ecdf(geom = "step") +
+	ylab('Cumulative fraction') +
+	xlab('Width of candidate regions (bp)') + 
+	xlim(0, max(subset_candidateFile$width)) +
+	theme_minimal() + scale_color_discrete(name='Prediction set') + 
+	theme(text = element_text(size = rel(4)), legend.text=element_text(size=rel(2.5)))
+
+subset_candidateFile = subset_candidateFile[order(subset_candidateFile$DHS),]
+cdfAccessible = ggplot(subset_candidateFile, aes(DHS, col=Method)) +
+		stat_ecdf(geom = "step") +
+		ylab('Cumulative fraction') +
+		xlab('log2(DHS) of candidate regions') + 
+		theme_minimal() + scale_color_discrete(name='Prediction set') +
+		theme(text = element_text(size = rel(4)), legend.text=element_text(size=rel(2.5)))
+
+subset_candidateFile = subset_candidateFile[order(subset_candidateFile$H3K27ac),]
+cdfAcetylation = ggplot(subset_candidateFile, aes(H3K27ac, col=Method)) +
+		stat_ecdf(geom = "step") +
+		ylab('Cumulative fraction') +
+		xlab('log2(H3K27ac) of candidate regions') +
+		theme_minimal() + scale_color_discrete(name='Prediction set') +
+		theme(text = element_text(size = rel(4)), legend.text=element_text(size=rel(2.5)))
+```
+```{r cdfEnhancer, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+subset_predictionFile = subset_predictionFile[order(subset_predictionFile$width),]
+cdfEnhWidth = ggplot(subset_predictionFile, aes(width, col=Method)) +
+	stat_ecdf(geom = "step") +
+	ylab('Cumulative fraction') +
+	xlab('Width of enhancer regions (bp)') +
+	xlim(0, max(subset_predictionFile$width)) +
+	theme_minimal() + scale_color_discrete(name='Prediction set') +
+	theme(text = element_text(size = rel(4)), legend.text=element_text(size=rel(2.5)))
+
+subset_predictionFile = subset_predictionFile[order(subset_predictionFile$DHS),]
+cdfEnhAccessible = ggplot(subset_predictionFile, aes(DHS, col=Method)) +
+	stat_ecdf(geom = "step") +
+	ylab('Cumulative fraction') +
+	xlab('log2(DHS) of enhancer regions') +
+	theme_minimal() + scale_color_discrete(name='Prediction set') +
+	theme(text = element_text(size = rel(4)), legend.text=element_text(size=rel(2.5)))
+
+subset_predictionFile = subset_predictionFile[order(subset_predictionFile$H3K27ac),]
+cdfEnhAcetylation = ggplot(subset_predictionFile, aes(H3K27ac, col=Method)) +
+	stat_ecdf(geom = "step") +
+	ylab('Cumulative fraction') +
+	xlab('log2(H3K27ac) of enhancer regions') +
+	theme_minimal() + scale_color_discrete(name='Prediction set') +
+	theme(text = element_text(size = rel(4)), legend.text=element_text(size=rel(2.5)))
+```
+
+```{r cdfSummary, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, fig.width=18, fig.height=10}
+
+cdfWidth <- cdfWidth + ggtitle('A')
+cdfAccessible <- cdfAccessible + ggtitle('B')
+cdfAcetylation <- cdfAcetylation + ggtitle('C')
+
+cdfEnhWidth <- cdfEnhWidth + ggtitle('D')
+cdfEnhAccessible <- cdfEnhAccessible + ggtitle('E')
+cdfEnhAcetylation <- cdfEnhAcetylation + ggtitle('F')
+
+patchwork <- (cdfWidth+cdfAccessible+cdfAcetylation) /(cdfEnhWidth+cdfEnhAccessible+cdfEnhAcetylation)
+patchwork 
+```
+**Fig2. Cumulative Density Plots of Width, Accessibility and Acetylation for Candidate regions (top) and enhancer regions (bottom). a**, Width of candidate enhancer regions (bp) across all biosamples. **b**, log2(DNase) counts of candidate enhancer regions across all biosamples. **c**, log2(H3K27ac) counts of candidate enhancer regions across all biosamples. **d**, Width of enhancer regions (bp) across all biosamples. **e**, log2(DNase) counts of enhancer regions across all biosamples. **f**, log2(H3K27ac) counts of enhancer regions across all biosamples.
+
+
+```{r getPredictions, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+
+data <- read.delim(mergedPredictionFiles[1], sep = "\t", header=FALSE, check.names=F, stringsAsFactors=F, row.names=NULL)
+colnames(data) <- c("chr", "start", "end", "TargetGene", "numGenes", "Biosamples", "numBiosamples")
+
+## Number of genes regulated by a given region of the genome 
+numGenesRegulatedByGivenRegionFile <- read.delim(numGenes[1], sep = "\t", header=FALSE, check.names=F, stringsAsFactors=F, row.names=NULL)
+numGenesRegulatedByGivenRegion <- data.frame(numGenes = length(numGenesRegulatedByGivenRegionFile$V1), Method=lists_of_predictions[1])
+
+## Number of biosamples with a similar Enhancer-Gene Link
+numBiosamplesWithSimilarEGLinkFile <- read.delim(numBiosamplesCounts[1], sep = "\t", header=FALSE, check.names=F, stringsAsFactors=F, row.names=NULL)
+numBiosamplesWithSimilarEGLink <- data.frame(numBiosamples = numBiosamplesWithSimilarEGLinkFile$V1, Method=lists_of_predictions[1])
+
+## Total number of unique bp 
+numUniquebpFile <- read.delim(numUniqueBP[1], sep = "\t", header=FALSE, check.names=F, stringsAsFactors=F, row.names=NULL)
+numUniquebpVal <- data.frame(totalBP = numUniquebpFile$V1, Method=lists_of_predictions[1])
+
+## Number of Enhancer Gene Connections across all biosamples
+# TargetGene not a column 
+#numEnhancerGeneConnections <- data %>% group_by(TargetGene) %>% summarize(n = length(unique(chr, start, end)))
+#numEnhancerGeneConnections <- data.frame(numEnhancerGeneConnections=numEnhancerGeneConnections$n, Method=lists_of_predictions[1])
+
+## Number of Genes per region
+NumGenesPerRegion = data %>% group_by(chr, start, end) %>% summarize(numGenes = length(unique(TargetGene)))
+NumGenesPerRegion <- data.frame(numGenesPerRegion=NumGenesPerRegion$numGenes, Method=lists_of_predictions[1])
+#
+#for (i in 2:length(predictionAllCelltype)){
+#	temp <- read.delim(predictionAllCelltype[i], sep = "\t", header=TRUE, check.names=F, stringsAsFactors=F, row.names=NULL)
+#	numEG_temp <- temp %>% group_by(chr, start, end, TargetGene) %>% tally()
+#		
+#}
+
+```
+
+```{r plotAdditional, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + scale_y_continuous(limits = c(0, 0.20)) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(legend.position='none')
+
+# What total number of genes have a predicted enhancer in any biosample? 
+numGenesRegulatedByGivenRegionPlot <- ggplot(numGenesRegulatedByGivenRegion, aes(x=Method, y=numGenes)) + ylab("Number of Genes") + labs(title="Number of Genes that have a predicted enhancer in any biosample")  
+numGenesRegulatedByGivenRegionPlot <- numGenesRegulatedByGivenRegionPlot %>% formatEnrichmentBarPlot()
+
+#     * Given an enhancer (in a particular biosample), in how many other biosamples are there overlapping enhancers called?
+numBiosamplesWithSimilarEGLinkPlot <- ggplot(numBiosamplesWithSimilarEGLink, aes(x=Method, y=numBiosamples)) + ylab("Number of Biosamples") + labs(title="Number of Biosamples with similar EG links") 
+numBiosamplesWithSimilarEGLinkPlot <- numBiosamplesWithSimilarEGLinkPlot %>% formatEnrichmentBarPlot()
+
+# How many total unique basepairs are contained in the enhancers for each gene across all biosamples?
+numUniquebpValPlot <- ggplot(numUniquebpVal, aes(x=Method, y=totalBP)) + ylab("Total number of unique basepairs in enhancers (bp)")
+numUniquebpValPlot <- numUniquebpValPlot %>% formatEnrichmentBarPlot()
+
+# Given an enhancer-gene connection in a particular biosample, in how many other biosamples is there an overlapping enhancer connected to the same gene?
+numEnhancerGeneConnections <- read.delim(numEnhancerGeneConnectionsFile[1] ,sep = "\t", header=FALSE, check.names=F, stringsAsFactors=F, row.names=NULL)
+numEnhancerGeneConnections$Method = lists_of_predictions[1]
+numEnhancerGeneConnections$numEnhancerGeneConnections = numEnhancerGeneConnections$V2
+numEnhancerGeneConnectionsPlot <- ggplot(numEnhancerGeneConnections, aes(x=Method, y=numEnhancerGeneConnections)) + ylab("Number of Enhancer-Gene Connections") + labs(title="Number of Enhancer-Gene Connections / Gene across all Biosamples") 
+numEnhancerGeneConnectionsPlot <- numEnhancerGeneConnectionsPlot %>% formatEnrichmentBarPlot()
+
+#     * For a given region of the genome, how many genes does it regulate across all biosamples?
+numGenesPerRegionPlot <- ggplot(NumGenesPerRegion, aes(x=Method, y=numGenes)) + ylab("Number of Genes") 
+numGenesPerRegionPlot <- numGenesPerRegionPlot %>% formatEnrichmentBarPlot()
+```
+
+```{r plotAdditionalProperties, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+numGenesRegulatedByGivenRegionPlot <- numGenesRegulatedByGivenRegionPlot + ggtitle('A')
+numBiosamplesWithSimilarEGLinkPlot <- numBiosamplesWithSimilarEGLinkPlot + ggtitle('B')
+numUniquebpValPlot <- numUniquebpValPlot + ggtitle('C')
+
+numEnhancerGeneConnectionsPlot <- numEnhancerGeneConnectionsPlot + ggtitle('D')
+numGenesPerRegionPlot <- numGenesPerRegionPlot + ggtitle('E')
+
+patchwork <- (numGenesRegulatedByGivenRegionPlot + numBiosamplesWithSimilarEGLinkPlot + numEnhancerGeneConnectionsPlot) / (numUniquebpValPlot + numGenesPerRegionPlot)
+patchwork
+```
+**Fig3. Properties of enhancer-gene regions. a**, For a given region of the genome, the number of genes regulates across all biosamples. **b**, Given an enhancer (in a particular biosample), the number of biosamples that have an overlapping enhancer called. **c**, The total unique basepairs are contained in the enhancers for each gene across all biosamples. **d**, For a given region of the genome, the number of genes it regulates across all biosamples. **e**, For a given region of the genome, the number of genes it regulates across all biosamples. 

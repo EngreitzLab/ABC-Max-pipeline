@@ -1,7 +1,26 @@
+rule filterBackgroundDistalNonCoding:
+	input:
+		partition = config["partition"],
+		allVariants = config["bgVariants"]
+	output:
+		partitionDistalNoncoding = os.path.join(config["outDir"], "Parititon.distalNoncoding.bed"),
+		commonVarDistalNoncoding = os.path.join(config["outDir"], "distalNoncoding.bg.SNPs.bed.gz")
+	run:
+		shell(
+			"""
+			set +o pipefail;
+			
+			# filter partition to distal noncoding 
+			awk '$4=="ABC" || $4=="AllPeaks" || $4=="Other" || $4=="OtherIntron" || $4=="TSS-500bp"' {input.partition} | sort -k1,1 -k2,2n > {output.partitionDistalNoncoding}
+			
+			# filter common variants to distal noncoding
+		 	cat {input.allVariants} | bedtools intersect -wa -sorted -a stdin -b {output.partitionDistalNoncoding} | sort -k1,1 -k2,2n | gzip > {output.commonVarDistalNoncoding}	
+			""")
+
 rule computeBackgroundOverlap:
 	input:
 		predFile = lambda wildcard: config["predDir"]+str(preds_config_file.loc[wildcard.pred, "predFile"]),
-		allVariants = config["bgVariants"],
+		allVariants = os.path.join(config["outDir"], "distalNoncoding.bg.SNPs.bed.gz"),
 		chrSizes = config["chrSizes"],
 		CDS = config["CDS"]
 	params:
@@ -47,7 +66,7 @@ rule computeBackgroundOverlap:
 rule computeBackgroundOverlap_noPromoters:
 	input:
 		overallOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"),
-		bgVars = config["bgVariants"],
+		bgVars = os.path.join(config["outDir"], "distalNoncoding.bg.SNPs.bed.gz"),
 		CDS = config["CDS"],
 		geneTSS = expand("{outdir}{{pred}}/geneTSS.500bp.bed", outdir=config["outDir"])	
 	output:
@@ -105,13 +124,12 @@ rule createVarFiles:
 				#scoreCol=$(awk -v RS='\\t' '/{params.varFilterCol}/{{print NR; exit}}' {input.varList});
 
 				# Filtering to retain variants exceeding the threshold
-				#awk '{{ if ($($scoreCol) >= {params.varFilterThreshold}) {{ print }} }}' {input.varList}  > {output.sigvarList};
 				cat {input.varList} | csvtk -t filter -f "{params.varFilterCol}>={params.varFilterThreshold}" > {output.sigvarList};
 	
 				# Creating the bed file
 				# Finding and cutting chr, position, and variant columns
 				# TODO: do not require start and stop, only position?
-				cat {output.sigvarList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 | sed -e 's/8.1e+07/81000000/g'> {output.varBed};
+				cat {output.sigvarList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 | sed -e 's/8.1e+07/81000000/g' | sort -k1,1 -k2,2n > {output.varBed};
 
 				# Ensure that variants are sorted for bedtools -sorted overlap algorithm
 				cat {output.varBed} | bedtools sort -i stdin -faidx {params.chrSizes} | uniq > {output.varBedgraph};
@@ -122,7 +140,7 @@ rule createVarFiles:
 				#fi
 				# Creating the bed file for all variants
 				# Finding and cutting chr, pos, and var columns
-				cat {input.varList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 > {output.varBed};
+				cat {input.varList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 | | sort -k1,1 -k2,2n | bedtools intersect -wa -sorted -a stdin -b {input.partitionDistalNoncoding} > {output.varBed};
 
 				# Ensure that variants are sorted for bedtools -sorted overlap algorithm
 				cat {output.varBed} | bedtools sort -i stdin -faidx {params.chrSizes} | uniq > {output.varBedgraph};
@@ -175,7 +193,8 @@ rule generateAnnotateVariantInputs:
 		bgVars = config["bgVariants"],
                 bgVars_noPromoter = expand("{outdir}{{pred}}/all.bg.SNPs.noPromoter.bed.gz", outdir=config["outDir"]),
                 bgOverlap = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.tsv.gz", outdir=config["outDir"]),
-                bgOverlap_noPromoter = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.noPromoter.tsv.gz", outdir=config["outDir"])
+                bgOverlap_noPromoter = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.noPromoter.tsv.gz", outdir=config["outDir"]),
+		partitionDistalNoncoding = os.path.join(config["outDir"], "Parititon.distalNoncoding.bed")
 	output: 
 		bgVars_count = expand("{outdir}{{pred}}/bgVariants.count.tsv", outdir=config["outDir"]),
 		bgVars_noPromoter_count = expand("{outdir}{{pred}}/bgVariants.count.noPromoter.tsv", outdir=config["outDir"]),

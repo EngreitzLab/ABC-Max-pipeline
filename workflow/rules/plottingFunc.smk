@@ -6,9 +6,9 @@ rule plotTraitEnrichment:
 	input: 
 		cellTypeEnrichments = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
 	output:
-#		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"),
+		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"),
 		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.eps"),
-		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), caption="../report/CellTypeEnrichment.rst", category="Trait Enrichment Plots", subcategory="{trait}/{pred}")
+#		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), caption="../report/CellTypeEnrichment.rst", category="Trait Enrichment Plots", subcategory="{trait}/{pred}")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
 		codeDir = config["codeDir"],
@@ -32,9 +32,9 @@ rule plotTraitEnrichment_noPromoter:
 	input:
 		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
 	output:
-#		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"),
+		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"),
                 outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.eps"),
-		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"), caption="../report/CellTypeEnrichment.noPromoter.rst", category="Trait Enrichment Plots", subcategory="{trait}/{pred}")
+#		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"), caption="../report/CellTypeEnrichment.noPromoter.rst", category="Trait Enrichment Plots", subcategory="{trait}/{pred}")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
                 codeDir = config["codeDir"],
@@ -60,9 +60,9 @@ rule plotFractionOverlap:
 	input:
 		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
 	output:
-#		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.pdf"),
+		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.pdf"),
 		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.eps"),
-		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.pdf"), caption="../report/CellTypeOverlap.rst", category="Fraction Enhancer Overlap", subcategory="{trait}/{pred}")
+#		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.pdf"), caption="../report/CellTypeOverlap.rst", category="Fraction Enhancer Overlap", subcategory="{trait}/{pred}")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
                 codeDir = config["codeDir"],
@@ -88,9 +88,9 @@ rule plotFractionOverlap_noPromoter:
 	input:
 		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
 	output:
-#		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.pdf"),
+		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.pdf"),
 		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.eps"),
-		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.pdf"), caption="../report/CellTypeOverlap.noPromoter.rst", category="Fraction Enhancer Overlap", subcategory="{trait}/{pred}")
+#		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.pdf"), caption="../report/CellTypeOverlap.noPromoter.rst", category="Fraction Enhancer Overlap", subcategory="{trait}/{pred}")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
 		codeDir = config["codeDir"],
@@ -112,13 +112,42 @@ rule plotFractionOverlap_noPromoter:
                         --entry {params.entry}
 			""")
 
+rule plotFractionOverlapPosteriorProb:
+	input:
+		allflat = expand("{outdir}{{pred}}/{trait}/data/all.flat.tsv", outdir=config["outDir"], trait=all_traits)
+	
+	output:
+		tsv = os.path.join(config["outDir"], "{pred}/EnrichmentVsPosteriorProb.tsv"),
+		pdf = os.path.join(config["outDir"], "{pred}/EnrichmentVsPosteriorProb.pdf")
+	
+	params:
+                traitTable = config["traitTable"],
+		dataDir = config["traitDir"],
+		outDir = os.path.join(config["outDir"], "{pred}/"),
+                codeDir = config["codeDir"]
+	
+	message: "Running fraction overlap plots with increasing posterior probability threshold"
+	run:
+		shell(
+			"""
+			set +o pipefail;
+			
+			Rscript {params.codeDir}/PlotVariantFractionPosProb.R \
+			--allFlat "{input.allflat}" \
+			--datadir {params.dataDir} \
+			--traitTable {params.traitTable} \
+			--outdir {params.outDir} \
+			--codeDir {params.codeDir}	
+			""")
+		
+
 rule plotIndividualGenePrecisionRecall:
 	input:
 		genePredTable = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.tsv",outdir=config["outDir"]),
 		knownGenes = lambda wildcard: str(config["predDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
 	output:
-#		prPdf = os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf"),
-		prPdf = report(os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf"), caption="../report/GenePrecisionRecall.rst", category="Precision and Recall", subcategory="{trait}/{pred}")
+		prPdf = os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf"),
+#		prPdf = report(os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf"), caption="../report/GenePrecisionRecall.rst", category="Precision and Recall", subcategory="{trait}/{pred}")
 	params:
 		codeDir = config["codeDir"],
 		projectDir = config["projectDir"]
@@ -138,8 +167,8 @@ rule plotGenePrecisionRecall:
 		genePredTable = expand("{outdir}{pred}/{{trait}}/GenePredictions.allCredibleSets.tsv", pred=all_predictions, outdir=config["outDir"]),
 		knownGenes = lambda wildcard: str(config["predDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
 	output:
-#		prPdf = os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"),
-		prPdf = report(os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"), caption="../report/GenePrecisionRecall.Agg.rst", category="Precision and Recall", subcategory="{trait}")
+		prPdf = os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"),
+#		prPdf = report(os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"), caption="../report/GenePrecisionRecall.Agg.rst", category="Precision and Recall", subcategory="{trait}")
 	params:
 		codeDir = config["codeDir"],
 		projectDir = config["projectDir"]
@@ -159,9 +188,10 @@ rule plotAggregate_cdf:
 	input:
 		enrichmentFiles = expand("{outdir}{pred}/{{trait}}/enrichment/Enrichment.CellType.vsScore.{{trait}}.tsv", outdir=config['outDir'], pred=all_predictions)
 	output:
-#		outfile = os.path.join(config["outDir"], "GWAS.{trait}.cdf.pdf"),
-		outDensity = report(os.path.join(config["outDir"], "GWAS.{trait}.density.pdf"), caption="../report/GWAS.density.rst", category="Enrichment Density Plots", subcategory="{trait}"),
-		outfile = report(os.path.join(config["outDir"], "GWAS.{trait}.cdf.pdf"), caption="../report/GWAS.cdf.rst", category="Enrichment Density Plots", subcategory="{trait}")
+		outfile = os.path.join(config["outDir"], "GWAS.{trait}.cdf.pdf"),
+		outDensity = os.path.join(config["outDir"], "GWAS.{trait}.density.pdf")
+#		outDensity = report(os.path.join(config["outDir"], "GWAS.{trait}.density.pdf"), caption="../report/GWAS.density.rst", category="Enrichment Density Plots", subcategory="{trait}"),
+#		outfile = report(os.path.join(config["outDir"], "GWAS.{trait}.cdf.pdf"), caption="../report/GWAS.cdf.rst", category="Enrichment Density Plots", subcategory="{trait}")
 	params:
 		codeDir = config["codeDir"],
 		predictors = all_predictions,
@@ -178,24 +208,69 @@ rule plotAggregate_cdf:
 			--outDir {params.outDir}
 			""")
 	
-# TODO: Should we also create aggregate plots for both data that contains promoters and data with filtered out promoters 
-rule plotAggregate:
-	output:
-#		outfile = os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"),
-		outfile = report(os.path.join(config["outDir"], "{trait}/{trait}_across_all_predictions.pdf"), caption="../report/ComparativeAggregatePlots.rst", category="Comparison Plots")
+rule plottingReport: 
+	input:
+		cellTypeEnrichments = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv"),
+		genePredTable = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.Dedup.tsv",outdir=config["outDir"]),
+		allgenePredTable = expand("{outdir}{pred}/{{trait}}/GenePredictions.allCredibleSets.tsv",outdir=config["outDir"], pred=all_predictions),
+		knownGenes = lambda wildcard: str(config["traitDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"])),
+		enrichmentFiles = expand("{outdir}{pred}/{{trait}}/enrichment/Enrichment.CellType.vsScore.{{trait}}.tsv", outdir=config['outDir'], pred=all_predictions),
+		allFlat = expand("{outdir}{{pred}}/{trait}/data/all.flat.tsv", outdir=config["outDir"], trait=all_traits)
 	params:
-		predictorOfChoice = config["predictorOfChoice"],
-		predictors = all_predictions,
 		codeDir = config["codeDir"],
-		outDir = config["outDir"]
-	message: "Aggregating enrichment plots across predictors"
-	run:
-		shell(
-			"""
-			python {params.codeDir}/plot_aggregate.py \
-			--traits {wildcards.trait} \
-			--predictor_of_choice {params.predictorOfChoice} \
-			--data_outdir {params.outDir} \
-			--outdir {params.outDir} \
-			--predictors {params.predictors}
-			""")
+		predictors = all_predictions,
+		outDir = config["outDir"],
+		predDir = config["predDir"],
+		traitDir = config["traitDir"],
+		knownGeneMaxDistance = "1000000" ,
+		isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]),
+		indivOutDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
+		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
+		traitTable = config["traitTable"],
+		outEps = "placeholder.eps"
+	output: 
+		html = os.path.join(config["outDir"], "{pred}/{trait}/GWAS_enrichment_report.html")
+	message: "Compiling R Markdown report in html format"
+	script: os.path.join(config["codeDir"], "plottingFuncReport.Rmd")
+
+rule plottingAggregateReport:
+        input:
+                allgenePredTable = expand("{outdir}{{pred}}/{trait}/GenePredictions.allCredibleSets.Dedup.tsv",outdir=config["outDir"], trait=all_traits),
+		knownGenes = expand("{outdir}GeneLists.{trait}.txt",outdir=config["traitDir"], trait=all_traits),
+                enrichmentFiles = expand("{outdir}{{pred}}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv", outdir=config['outDir'], trait=all_traits),
+                allFlat = expand("{outdir}{{pred}}/{trait}/data/all.flat.tsv", outdir=config["outDir"], trait=all_traits)
+        params:
+                codeDir = config["codeDir"],
+                predictors = all_predictions,
+                outDir = config["outDir"],
+		indivOutDir = os.path.join(config["outDir"], "{pred}/"),
+                predDir = config["predDir"],
+		traitDir = config["traitDir"],
+                knownGeneMaxDistance = "1000000" ,
+                isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]),
+                cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
+                traitTable = config["traitTable"],
+                outEps = "placeholder.eps"
+        output:
+                html = os.path.join(config["outDir"], "{pred}/GWAS_aggregate_report.html")
+        message: "Compiling R Markdown report in html format"
+        script: os.path.join(config["codeDir"], "plottingAggregateTraits.Rmd")
+
+
+rule plotPropertyReport:
+	input:
+		enhancerPredictions = expand("{outdir}{pred}_enhancerRegions_signal_coverage.tsv", outdir=config["resources"], pred=all_predictions), 
+		candidateRegions = expand("{outdir}{pred}_candidateRegions_signal_coverage.tsv", outdir=config["resources"], pred=all_predictions), 
+#		mergeEnhancerRegions = expand("{outdir}{pred}/{pred}.mergedEnhancerRegions.tsv.gz", outdir=config["outDir"], pred=all_predictions),
+#		numGenes = expand("{outdir}{pred}/{pred}.metrics.numGenes.tsv", outdir=config["outDir"], pred=all_predictions), 
+#		numBiosamplesCounts = expand("{outdir}{pred}/{pred}.metrics.numBiosamplesCounts.tsv", outdir=config["outDir"], pred=all_predictions),
+#		totalUniquebp = expand("{outdir}{pred}/{pred}.metrics.uniquebp.tsv", outdir=config["outDir"], pred=all_predictions),
+#		numEGCounts = expand("{outdir}{pred}/{pred}.metrics.numEGCounts.tsv", outdir=config["outDir"], pred=all_predictions)
+	params:
+		num_examples = "1000",
+		allpredictions = all_predictions
+	output:
+		html = os.path.join(config["outDir"], "property_aggregate_report.html")
+	message: "Getting enhancer properties" 
+	script: os.path.join(config["codeDir"], "plottingProperties1.Rmd")
+	
