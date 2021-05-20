@@ -49,22 +49,20 @@ print("Open files")
 names = strsplit(opt$genePredTable, " ") %>% unlist()
 # aggregate data 
 gp <- read.delim(names[1], check.names=F, stringsAsFactors=F, comment.char='#')
-
+write.table(gp, file="gp.tsv")
 # merge cols
 mergecols <- colnames(gp[, 1:10])
 print(mergecols)
-
-for (i in 2:length(names)){
-	temp = read.delim(file=names[i], check.names=F, stringsAsFactors=F, comment.char='#')
-	gp = merge(gp, temp, by=mergecols)
+print("reading...")
+if (length(names) > 1) {
+	for (i in 2:length(names)){
+		temp = read.delim(file=names[i], check.names=F, stringsAsFactors=F, comment.char='#')
+		gp = merge(gp, temp, by=mergecols)
+	}
 }
-
-knownGenes <- read.delim(opt$knownGenes, check.names=F, stringsAsFactors=F, comment.char='#')
-print(length(knownGenes))
-print(length(gp))
+knownGenes <- read.delim(opt$knownGenes, header=T, check.names=F, stringsAsFactors=F, comment.char='#')
 predictors <- colnames(gp)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp))]
-print(length(predictors))
-
+print(knownGenes)
 
 #######################################################################
 ## Functions for plotting PR curves
@@ -75,13 +73,14 @@ mytheme <- theme_classic() + theme(
 
 getPrecisionBaseline <- function(gp) mean(1 / unique(gp[,c("CredibleSet","CredibleSet.nNearbyGenes")])$TotalNearbyGenes)
 
-getPRTable <- function(gp, pred.cols) {
-  pr <- do.call(rbind, c(
+getPRTable <- function(gp, pred.cols) {    
+    pr <- do.call(rbind, c(
     with(gp, list(
       getPrecisionRecall(DistanceRank == 1, knownGene, Method="Closest Gene"),
       getPrecisionRecall(DistanceToTSSRank == 1, knownGene, Method="Closest TSS"))),
     lapply(pred.cols, function(col) getPrecisionRecall(gp[,col], gp$knownGene, Method=gsub("^Gene","",col)))
   ))
+  write.table(pr, file="pr.tsv")
   return(pr)
 }
 
@@ -104,7 +103,7 @@ doOneKnownGeneList <- function(gene.list.name, gp, predictors, maxKnownGenes=1) 
         group_by(CredibleSet) %>% mutate(nKnownGenes=sum(knownGene)) %>% ungroup() %>%
         filter(nKnownGenes > 0 & nKnownGenes <= maxKnownGenes & CredibleSet.NoncodingWithSigVariant) %>% as.data.frame()
   pr <- getPRTable(gp.plot, predictors)
-  p <- getPRPlot(pr, baseline=getPrecisionBaseline(gp), xlab=paste0("Recall (n=",sum(gp.plot$knownGene),")"))
+  p <- getPRPlot(pr, baseline=getPrecisionBaseline(gp), xlab=paste0("Recall (n=",maxKnownGenes,")"))
   print(p)
 }
 
@@ -114,7 +113,7 @@ doOneKnownGeneList <- function(gene.list.name, gp, predictors, maxKnownGenes=1) 
 
 pdf(file=opt$outPdf, width=6, height=4, onefile=T)
 for (gl in colnames(knownGenes))
-  doOneKnownGeneList(gl, gp, predictors)
+  doOneKnownGeneList(gl, gp, predictors, maxKnownGenes=length(knownGenes))
 dev.off()
 
 

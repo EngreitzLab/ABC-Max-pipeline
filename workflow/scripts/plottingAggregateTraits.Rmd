@@ -42,7 +42,8 @@ source(paste0(snakemake@params$codeDir, "CredibleSetTools.R"))
 all_predictors = strsplit(snakemake@params$predictors, " ") %>% unlist()
 enrichmentTables = strsplit(snakemake@input$enrichmentFiles, " ") %>% unlist()
 cellCategories <- read.delim(snakemake@params$cellTypeTable, header=T, sep="\t")
-#knownGenes <- strsplit(snakemake@input$knownGenes, " ") %>% unlist()
+numCellTypesDF <- read.delim(snakemake@input$enrichedCellTypes, header=T, sep="\t")
+enrichVsPp.noncoding <- read.delim(snakemake@input$enrichVsPp_noncoding, header=T, sep="\t")
 pred <- snakemake@wildcards$pred
 ```
 ```{r plottingEnrichmentCode, echo=FALSE, error=FALSE, message=FALSE,  warnings=FALSE}
@@ -50,16 +51,18 @@ pred <- snakemake@wildcards$pred
 # This function takes in *.Enrichment.vsScore.tsv files and outputs enrichment bar plots across different cell categories as defined by catOrder 
 
 cellEnrichment <- read.delim(enrichmentTables[1], sep = "\t", header=TRUE, check.names=F, stringsAsFactors=F, row.names=NULL)
-cellEnrichment <- transform(cellEnrichment, n.FractionOverlap = n / total)
-cellEnrichment <- transform(cellEnrichment, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
-
+cellEnrichment$Method <- all_predictors[1]
+#cellEnrichment <- transform(cellEnrichment, n.FractionOverlap = n / total)
+#cellEnrichment <- transform(cellEnrichment, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
+#
 if (length(enrichmentTables) > 1){
 	for (i in 2:length(enrichmentTables)){
 		tryCatch(
                 {
                         temp = read.delim(file=enrichmentTables[i], sep='\t', header=TRUE, stringsAsFactors = FALSE)
-                        temp <- transform(temp, n.FractionOverlap = n / total)
-			temp <- transform(temp, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
+			temp$Method <- all_predictors[i]
+#                        temp <- transform(temp, n.FractionOverlap = n / total)
+#			temp <- transform(temp, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
 			cellEnrichment = rbind(cellEnrichment, temp)
                 },
                 error=function(cond) {
@@ -73,9 +76,10 @@ if (length(enrichmentTables) > 1){
 
 # Set theme of plots
 mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1), axis.text=element_text(size=13))#, axis.text = element_text(size = 13), axis.title = element_text(size = 15))
-
+aggregateDF <- cellEnrichment
 ibdEnhancerList <- cellEnrichment[, c("CellType", "Disease", "enrichment", "enrichment.NoPromoters", "n.noPromoters.FractionOverlap", "n.FractionOverlap")]
-
+is_method <- ibdEnhancerList$Method == pred
+bdEnhancerList <- ibdEnhancerList[is_method,]
 diseases <- unique(ibdEnhancerList$Disease)
 #formatEnrichmentBarPlot <- function(p) p + geom_point() + mytheme() 
 formatEnrichmentBarPlot <- function(p) p + geom_boxplot(outlier.shape = NA) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=15), legend.position='none')
@@ -108,56 +112,83 @@ p4 <- p4 %>% formatEnrichmentBarPlot()
 #ggplotly(p4)
 ```
 
+```{r numEnrichedCellTypes, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+
+#cellEnrichmentSignificant <- cellEnrichment %>% filter(p.NoPromoters < 0.05)
+#numCellTypesVal <- cellEnrichmentSignificant %>% group_by(Disease) %>% summarize(numCellTypes = length(unique(CellType)))
+#dz <- unique(cellEnrichmentSignificant$Disease)
+#numCellTypesDF <- data.frame(n=numCellTypesVal$numCellTypes, Disease=dz)
+#write.table(numCellTypesDF, file="numCellTypesDF.tsv")
+numCellTypesPlot_noPromoters <- ggplot(numCellTypesDF, aes(x=Disease, y=n, fill=Disease)) + ylab(paste0("Number of Enriched CellTypes")) + ggtitle(paste0("Enhancers (including promoter regions)")) + mytheme + geom_dotplot(binaxis='y', stackdir='center') + scale_color_manual(values=diseases) + scale_color_hue(l=50, c=90) + theme(legend.position='none') + scale_y_continuous(breaks=seq(0,max(numCellTypesDF$n),10))
+numCellTypesPlot_noPromotersPlotly <- ggplotly(numCellTypesPlot_noPromoters)
+```
+
+```{r numEnrichedCellTypes_noPromoters, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+#cellEnrichmentSignificant <- cellEnrichment %>% filter(p < 0.05)
+#numCellTypes <- cellEnrichmentSignificant %>% group_by(Disease) %>% mutate(numCellTypes=length(unique(cellEnrichmentSignificant$CellType)))
+#numCellTypesPlot_noPromoters <- ggplot(numCellTypes, aes(x=Disease, y=numCellTypes, fill = Disease)) + ylab(paste0("Number of Enriched CellTypes")) + ggtitle(paste0("Enhancers (excluding promoter regions)"))
+```
+
+```{r cdfEnrichment, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+aggregateDF = aggregateDF[order(aggregateDF$enrichment.NoPromoters),]
+cdf = ggplot(aggregateDF, aes(x=enrichment.NoPromoters, col=Method)) + 
+	stat_ecdf(geom = "step") + ylab('Cumulative fraction') + 
+	xlab('Enrichment (GWAS variants/all common variants)') + 
+	theme() + 
+	labs(title = "Density Plot for all enhancers (w/o promoter regions)")
+```
+
 ```{r plotFractionOverlapPosProb, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE, fig.width=6, fig.height=4}
-allFlat = strsplit(snakemake@input$allFlat, " ") %>% unlist()
-trait_params = read.delim(snakemake@params$traitTable, sep='\t', header=TRUE, stringsAsFactors = FALSE)
+#allFlat = strsplit(snakemake@input$allFlat, " ") %>% unlist()
+#trait_params = read.delim(snakemake@params$traitTable, sep='\t', header=TRUE, stringsAsFactors = FALSE)
 #
 ## Look at overlap of all variants with ABC enhancer as function of posterior prob (in any cell type\, not just enriched cell types)
-all.flat.full = read.csv(file=allFlat[1], sep='\t', header=TRUE, stringsAsFactors = FALSE)
-scorecol <- all.flat.full %>% select(contains("Score"))
-all.flat.full.subset <- all.flat.full %>% select(QueryRegionName,chr,start,end,TargetGene,CellType,variant.chr,variant.start,variant.end,TargetGeneIsCoding,CredibleSet,Disease,PosteriorProb,Coding,SpliceSite,Promoter,LocusID)
-all.flat.full.subset$Score <- scorecol
 
-if(length(allFlat)>1){
-       for (i in 2:length(allFlat)){
-               tryCatch(
-               {
-		       temp = read.delim(file=allFlat[i], sep='\t', header=TRUE, stringsAsFactors = FALSE)
-                       scorecol <- temp %>% select(contains("Score"))
-                       temp.subset <- temp %>% select(QueryRegionName,chr,start,end,TargetGene,CellType,variant.chr,variant.start,variant.end,TargetGeneIsCoding,CredibleSet,Disease,PosteriorProb,Coding,SpliceSite,Promoter,LocusID)
-                       temp.subset$Score <- scorecol
-                       all.flat.full.subset = rbind(all.flat.full.subset, temp.subset)
-               },
-               error=function(cond) {
-                       message(paste("File does not exist::", i))
-               },
-               finally={
-                       message(paste("Processed:",i))
-               })
-       }
-}
-
-all.flat.full <- all.flat.full.subset
-all.flat.full <- all.flat.full %>% select(QueryRegionName,Disease,PosteriorProb,CredibleSet,Coding,CellType) %>% unique()
-all.flat.full$CellType <- factor(all.flat.full$CellType)
-all.flat.v <- all.flat.full %>% select(-CellType) %>% unique()
-all.v <- readAllVariants(trait_params, snakemake@params$traitDir)
-
-# not necessary right now
-final.flat.full <- NULL
-final.flat.v <- NULL
-
-ppBreaks <- c(0,0.0001,0.001,seq(0.01,1,0.01))
-dzs <- unique(all.flat.v$Disease); dzs <- dzs[!(dzs %in% c("IBD+UC","IBD+CD"))]
-
-enrichVsPp <- getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v)
-enrichVsPp.byDisease <- do.call(rbind, lapply(dzs, function(dz) getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, dz=dz)))
-enrichVsPp <- rbind(enrichVsPp, enrichVsPp.byDisease)
-write.tab(enrichVsPp, file=paste0(snakemake@params$indivOutDir, "/EnrichmentVsPosteriorProb.tsv"))
-
-enrichVsPp.noncoding <- getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, noncodingOnly=TRUE)
-enrichVsPp.noncoding <- rbind(enrichVsPp.noncoding, do.call(rbind, lapply(dzs, function(dz) getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, dz=dz, noncodingOnly=TRUE))))
-write.tab(enrichVsPp.noncoding, file=paste0(snakemake@params$indivOutDir, "/EnrichmentVsPosteriorProbNonCoding.tsv"))
+#all.flat.full = read.csv(file=allFlat[1], sep='\t', header=TRUE, stringsAsFactors = FALSE)
+#scorecol <- all.flat.full %>% select(contains("Score"))
+#all.flat.full.subset <- all.flat.full %>% select(QueryRegionName,chr,start,end,TargetGene,CellType,variant.chr,variant.start,variant.end,TargetGeneIsCoding,CredibleSet,Disease,PosteriorProb,Coding,SpliceSite,Promoter,LocusID)
+#all.flat.full.subset$Score <- scorecol
+#
+#if(length(allFlat)>1){
+#       for (i in 2:length(allFlat)){
+#               tryCatch(
+#               {
+#		       temp = read.delim(file=allFlat[i], sep='\t', header=TRUE, stringsAsFactors = FALSE)
+#                       scorecol <- temp %>% select(contains("Score"))
+#                       temp.subset <- temp %>% select(QueryRegionName,chr,start,end,TargetGene,CellType,variant.chr,variant.start,variant.end,TargetGeneIsCoding,CredibleSet,Disease,PosteriorProb,Coding,SpliceSite,Promoter,LocusID)
+#                       temp.subset$Score <- scorecol
+#                       all.flat.full.subset = rbind(all.flat.full.subset, temp.subset)
+#               },
+#               error=function(cond) {
+#                       message(paste("File does not exist::", i))
+#               },
+#               finally={
+#                       message(paste("Processed:",i))
+#               })
+#       }
+#}
+#
+#all.flat.full <- all.flat.full.subset
+#all.flat.full <- all.flat.full %>% select(QueryRegionName,Disease,PosteriorProb,CredibleSet,Coding,CellType) %>% unique()
+#all.flat.full$CellType <- factor(all.flat.full$CellType)
+#all.flat.v <- all.flat.full %>% select(-CellType) %>% unique()
+#all.v <- readAllVariants(trait_params, snakemake@params$traitDir)
+#
+## not necessary right now
+#final.flat.full <- NULL
+#final.flat.v <- NULL
+#
+#ppBreaks <- c(0,0.0001,0.001,seq(0.01,1,0.01))
+#dzs <- unique(all.flat.v$Disease); dzs <- dzs[!(dzs %in% c("IBD+UC","IBD+CD"))]
+#
+#enrichVsPp <- getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v)
+#enrichVsPp.byDisease <- do.call(rbind, lapply(dzs, function(dz) getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, dz=dz)))
+#enrichVsPp <- rbind(enrichVsPp, enrichVsPp.byDisease)
+#write.tab(enrichVsPp, file=paste0(snakemake@params$indivOutDir, "/EnrichmentVsPosteriorProb.tsv"))
+#
+#enrichVsPp.noncoding <- getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, noncodingOnly=TRUE)
+#enrichVsPp.noncoding <- rbind(enrichVsPp.noncoding, do.call(rbind, lapply(dzs, function(dz) getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, dz=dz, noncodingOnly=TRUE))))
+#write.tab(enrichVsPp.noncoding, file=paste0(snakemake@params$indivOutDir, "/EnrichmentVsPosteriorProbNonCoding.tsv"))
 
 # 04122021 KSM: set this as an input instead of hardcoded
 bloodRelatedTraits <- c("Baso","Eosino","Hb","LOY","Lym","MCH","MCHC","MCV","Mono","Neutro","RBC","WBC")
@@ -181,17 +212,17 @@ mytheme <- theme_classic() #+ theme(
                            #       axis.title = element_text(size = 15))
 
 # import functions from R script
-getPrecisionBaseline <- function(gp) mean(1 / unique(gp[,c("CredibleSet","CredibleSet.nNearbyGenes")])$TotalNearbyGenes)
-
-getPRTable <- function(gp, pred.cols) {
-	        pr <- do.call(rbind, c(
-				       with(gp, list(
-						     getPrecisionRecall(DistanceRank == 1, knownGene, Method="Closest Gene"),
-						     getPrecisionRecall(DistanceToTSSRank == 1, knownGene, Method="Closest TSS"))),
-				       lapply(pred.cols, function(col) getPrecisionRecall(gp[,col], gp$knownGene, Method=gsub("^Gene","",col)))
-				       ))
-	return(pr)
-}
+#getPrecisionBaseline <- function(gp) mean(1 / unique(gp[,c("CredibleSet","CredibleSet.nNearbyGenes")])$TotalNearbyGenes)
+#
+#getPRTable <- function(gp, pred.cols) {
+#	        pr <- do.call(rbind, c(
+#				       with(gp, list(
+#						     getPrecisionRecall(DistanceRank == 1, knownGene, Method="Closest Gene"),
+#						     getPrecisionRecall(DistanceToTSSRank == 1, knownGene, Method="Closest TSS"))),
+#				       lapply(pred.cols, function(col) getPrecisionRecall(gp[,col], gp$knownGene, Method=gsub("^Gene","",col)))
+#				       ))
+#	return(pr)
+#}
 
 getPRPlot <- function(pr, baseline=NULL, xlab="Recall") {
 	pr <- pr %>% group_by(Method) %>% mutate(n=n())
@@ -206,70 +237,70 @@ getPRPlot <- function(pr, baseline=NULL, xlab="Recall") {
 	return(p)
 }
 
-doOneKnownGeneList <- function(gene.list.name, gp, predictors, maxKnownGenes=1, knownGeneMaxDistance=1000000) {
-       ## Current logic: Filter the gene prediction table to those credible sets with exactly one known gene nearby
-       gp.plot <- gp %>% filter(DistanceToTSS <= knownGeneMaxDistance) %>%
-	       mutate(knownGene=TargetGene %in% subsetGeneList[[gene.list.name]]) %>%
-	       group_by(CredibleSet) %>% mutate(nKnownGenes=sum(knownGene)) %>% ungroup() %>%
-	       filter(nKnownGenes > 0 & nKnownGenes <= maxKnownGenes & CredibleSet.NoncodingWithSigVariant) %>% as.data.frame()
-       #pr <- getPRTable(gp.plot, predictors)
-       return(gp.plot)
-}
+#doOneKnownGeneList <- function(gene.list.name, gp, predictors, maxKnownGenes=1, knownGeneMaxDistance=1000000) {
+#       ## Current logic: Filter the gene prediction table to those credible sets with exactly one known gene nearby
+#       gp.plot <- gp %>% filter(DistanceToTSS <= knownGeneMaxDistance) %>%
+#	       mutate(knownGene=TargetGene %in% subsetGeneList[[gene.list.name]]) %>%
+#	       group_by(CredibleSet) %>% mutate(nKnownGenes=sum(knownGene)) %>% ungroup() %>%
+#	       filter(nKnownGenes > 0 & nKnownGenes <= maxKnownGenes & CredibleSet.NoncodingWithSigVariant) %>% as.data.frame()
+#       #pr <- getPRTable(gp.plot, predictors)
+#       return(gp.plot)
+#}
 
 
 # PLOT Aggregate Precision-Recall Curves
-names = strsplit(snakemake@input$allgenePredTable, " ") %>% unlist()
-gp.all <- read.delim(names[1], header=T, check.names=F, stringsAsFactors=F, comment.char='#')
-
-traitsToInclude = selectUKBTraits(trait_params)
+#names = strsplit(snakemake@input$allgenePredTable, " ") %>% unlist()
+gp.all <- read.delim(snakemake@input$allgenePredTable, sep="\t", header=T, check.names=F, stringsAsFactors=F)
+aggPR <- read.delim(snakemake@input$PRtable, sep="\t", header=T, check.names=F, stringsAsFactors=F)
+#traitsToInclude = selectUKBTraits(trait_params)
 
 # read in list of knownGenes
-knownGenes = strsplit(snakemake@input$knownGenes, " ") %>% unlist()
-# only keep files that exists in traitsToInclude
-subsetGeneList = read.delim(knownGenes[1], header=T, check.names=F, stringsAsFactors=F, comment.char='#')
-subsetGeneList$GeneList <- subsetGeneList[, grepl("GeneList" , colnames(subsetGeneList))]
-
-if (length(knownGenes) > 1){
-	for (i in 2:length(knownGenes)){
-		tryCatch(
-		{
-			tempGene = read.delim(file=knownGenes[i], header=T, check.names=F, stringsAsFactors=F, comment.char='#')
-			tempGene$GeneList <- tempGene[, grepl("GeneList" , colnames(tempGene))] 
-			subsetGeneList = rbind(subset(subsetGeneList, select=GeneList), subset(tempGene, select=GeneList))
-		},
-		error=function(cond) {
-			message(paste("Gene File does not exist::", i))
-		},
-		finally={
-			message(paste("Gene File Processed:",i))
-		})
-	}
-}
-
-write.table(subsetGeneList, file="subsetGeneList.tsv")
-if (length(names) > 1){
-	for (i in 2:length(names)){
-		tryCatch(
-		{
-			temp = read.delim(file=names[i], header=T, check.names=F, stringsAsFactors=F, comment.char='#')
-	 		gp.all = rbind(gp.all, temp)
-		},
-		error=function(cond) {
-			message(paste("File does not exist::", i))
-		},
-		finally={
-			message(paste("Processed:",i))
-		})
-	}
-}
-
-predictors <- colnames(gp.all)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp.all))]
-subsetGeneList <- subsetGeneList %>% distinct(GeneList)
-
-for (gl in colnames(subsetGeneList))
-	gp.plot <- doOneKnownGeneList(gl, gp.all, predictors)
-        nRecall <- sum(gp.plot$knownGene)
-	aggPR <- getPRTable(gp.plot, predictors)
+#knownGenes = strsplit(snakemake@input$knownGenes, " ") %>% unlist()
+## only keep files that exists in traitsToInclude
+#subsetGeneList = read.delim(knownGenes[1], header=T, check.names=F, stringsAsFactors=F, comment.char='#')
+#subsetGeneList$GeneList <- subsetGeneList[, grepl("GeneList" , colnames(subsetGeneList))]
+#
+#if (length(knownGenes) > 1){
+#	for (i in 2:length(knownGenes)){
+#		tryCatch(
+#		{
+#			tempGene = read.delim(file=knownGenes[i], header=T, check.names=F, stringsAsFactors=F, comment.char='#')
+#			tempGene$GeneList <- tempGene[, grepl("GeneList" , colnames(tempGene))] 
+#			subsetGeneList = rbind(subset(subsetGeneList, select=GeneList), subset(tempGene, select=GeneList))
+#		},
+#		error=function(cond) {
+#			message(paste("Gene File does not exist::", i))
+#		},
+#		finally={
+#			message(paste("Gene File Processed:",i))
+#		})
+#	}
+#}
+#
+#if (length(names) > 1){
+#	for (i in 2:length(names)){
+#		tryCatch(
+#		{
+#			temp = read.delim(file=names[i], header=T, check.names=F, stringsAsFactors=F, comment.char='#')
+#	 		gp.all = rbind(gp.all, temp)
+#		},
+#		error=function(cond) {
+#			message(paste("File does not exist::", i))
+#		},
+#		finally={
+#			message(paste("Processed:",i))
+#		})
+#	}
+#}
+#
+#predictors <- colnames(gp.all)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp.all))]
+#subsetGeneList <- subsetGeneList %>% distinct(GeneList)
+#
+#for (gl in colnames(subsetGeneList))
+#	gp.plot <- doOneKnownGeneList(gl, gp.all, predictors)
+#        nRecall <- sum(gp.plot$knownGene)
+#	aggPR <- getPRTable(gp.plot, predictors)
+nRecall <- aggPR$nRecall
 aggCurve <- getPRPlot(aggPR, baseline=getPrecisionBaseline(gp.all), xlab=paste0("Recall (n=",nRecall,")"))
 dev.off()
 ```
@@ -282,20 +313,23 @@ The following report is done across all traits. <br>
 
 p1_title <- p1 + ggtitle('A') 
 p3_title <- p3 + ggtitle('B') 
-aggCurve_title <- aggCurve + ggtitle('C') 
+numCellTypesPlot_noPromoters_title <- numCellTypesPlot_noPromoters + ggtitle('C')
+aggCurve_title <- aggCurve + ggtitle('D') 
+cdfAgg <- cdf + ggtitle('E') 
 
 patchwork <- p1_title / p3_title
 patchwork
-aggCurve_title
+patchwork1 <- numCellTypesPlot_noPromoters_title / (aggCurve_title + cdfAgg)
+patchwork1
 ```
 
 <br>
-**Fig1. `r snakemake@wildcards$pred` maps connecting fine-mapped variants to enhancer, genes and celltypes. a**, Enrichment of fine-mapped variants (PIP>10%) in `r snakemake@wildcards$pred` enhancers. **b**, Fraction of fine-mapped variants (PIP>10%) overlapping `r snakemake@wildcards$pred` enhancers. **c**,  Precision–recall plot of connections between noncoding credible sets and known genes. 
+**Fig1. `r snakemake@wildcards$pred` maps connecting fine-mapped variants to enhancer, genes and celltypes. a**, Enrichment of fine-mapped variants (PIP>10%) in `r snakemake@wildcards$pred` enhancers. **b**, Fraction of fine-mapped variants (PIP>10%) overlapping `r snakemake@wildcards$pred` enhancers. **c**, Number of enriched celltypes of fine-mapped variants (PIP>10%) **d**,  Precision–recall plot of connections between noncoding credible sets and known genes. **e**, Cumulative density plot of enrichment across all traits.  
 <br>
 
-Below are interactive plots to allow further exploration of how your prediction method has performed across all common disease traits. 
+Below are interactive plots to allow further exploration of how your prediction method has performed across all common disease traits. <br>
 Summary statistics like (min/max/median/quantiles) are reported here, as well as outlier points. <br> 
-The first question we ask is : 
+The first question we ask is : <br>
 ## To what extent are GWAS variants enriched in predicted enhancers?
 ### Enrichment of GWAS variants for enhancers (including promoter regions)  and (excluding promoter regions)
 These barplots calculates the enrichment for fine-mapped variants (PIP >= 10%) in `r snakemake@wildcards$pred` enhancers (left) and enhancers without promoter regions (promoter regions as defined by RefSeq) (right) across all biosamples. Variants were filtered to only include non-coding distal elements.  
@@ -322,10 +356,11 @@ pred = snakemake@wildcards$pred
 # get index
 index = which(all_predictors==pred)[[1]]
 cat("  \n###",  all_predictors[index], "  \n")
-table.current = read.table(enrichmentTables[index], header=TRUE) %>% dplyr::select(CellType, Disease, enrichment, enrichment.NoPromoters, n, total, n.NoPromoters, total.NoPromoters )
+#table.current = read.table(enrichmentTables[index], header=TRUE) %>% dplyr::select(CellType, Disease, enrichment, enrichment.NoPromoters, n, total, n.NoPromoters, total.NoPromoters )
+table.current = ibdEnhancerList
 cat("  \n")
-table.current <- transform(table.current, n.FractionOverlap = n / total)
-table.current <- transform(table.current, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
+#table.current <- transform(table.current, n.FractionOverlap = n / total)
+#table.current <- transform(table.current, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
 table.current <- table.current %>% dplyr::select(CellType, Disease, enrichment, enrichment.NoPromoters, n.FractionOverlap, n.noPromoters.FractionOverlap)
 cat(knitr::knit_print(datatable(table.current, rownames = FALSE, filter="top", 
 			options=list(pageLength = 5, scrollX=T))))
@@ -337,7 +372,6 @@ cat("  \n")
 # To what extent do GWAS variants overlap predicted enhancers?
 ## Variant overlap of GWAS variants for enhancers (including promoter regions) (left) and enhancers (excluding promoter regions) (right)
 We plot the fraction overlap of variants (PIP >= 10%) that overlap `r snakemake@wildcards$pred` enhancers with and without promoter regions (promoter regions as defined by RefSeq) across all biosamples.
-
 ```{r enrichmentplot3, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.width=14, fig.height=6}
 ptly3 <- ggplotly(p3)
 ptly4 <- ggplotly(p4)
@@ -347,11 +381,17 @@ ptly4
 cap <- paste0("Fig3. Fraction overlap of fine-mapped variants (PIP >= 10%) in \n enhancers across all biosamples. Box plots show median (middle line) and interquartile range (boxes) and whiskers show observations less than or equal to quartiles ± 1.5× the interquartile range. Outliers are shown in black.")
 ```
 
+# How many enriched celltypes are called across all traits? 
+```{r plotEnriched, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.height=6, fig.width=10}
+numCellTypesPlot_noPromoters 
+cap <- paste0("Fig 4. Number of enriched celltypes (p < 0.05) when calculating for enrichment of GWAS variants / all variants across all traits.")
+```
+
 # How does the fraction of noncoding variants that overlap a given `r snakemake@wildcards$pred` enhancer in any biosample change given the PIP threshold?
 Variants were filtered to include only distal non-coding. Blue represents IBD. Red represents 12 other blood traits. Black represents the average across all traits and Gray represents the remaining 57 other traits. 
 ```{r enrichmentplot5, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.height=4, fig.width=6}
-#ggplotly(p)
-cap <- paste0("Fig4. Fraction of noncoding variants above a given PIP threshold that overlap an ", pred, " enhancer in any biosample. Black line, weighted average across traits. Traces are shown for PIP thresholds above which there are at least five variants. Dashed line, fraction of all common noncoding variants that overlap ", pred, " enhancers.")
+ggplotly(p)
+cap <- paste0("Fig5. Fraction of noncoding variants above a given PIP threshold that overlap an ", pred, " enhancer in any biosample. Black line, weighted average across traits. Traces are shown for PIP thresholds above which there are at least five variants. Dashed line, fraction of all common noncoding variants that overlap ", pred, " enhancers.")
 ```
 
 # How well do predictions connect noncoding credible sets to known disease genes?
@@ -360,7 +400,7 @@ These precision-recall curves seek to plot the performance of choosing the gene 
 **Recall** = fraction of known genes that were identified. <br>
 ```{r plot6, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.width=10, fig.height=4}
 aggCurve
-cap <- paste0("Fig5. Precision–recall plot of connections between noncoding credible sets and known genes, where recall is the fraction of credible sets for which the known
+cap <- paste0("Fig6. Precision–recall plot of connections between noncoding credible sets and known genes, where recall is the fraction of credible sets for which the known
 	      gene is identified (sensitivity) and precision is the fraction of predicted
 	      genes corresponding to known genes (positive predictive value). As baseline, the heuristic of assigning each GWAS credible
 	      set to the closest gene—a method that is widely used to annotate GWAS
@@ -374,33 +414,28 @@ Summary statistics for IBD, Crohn’s disease and ulcerative colitis (European a
 <br>
 
 **Defining enriched biosamples for each trait** <br> 
-For a given trait, we intersected variants with PIP ≥ 10% in noncoding
-credible sets with `r snakemake@wildcards$pred` enhancers (or other genomic annotations). For
-each biosample, we calculated a P value using a binomial test comparing the fraction at which PIP ≥ 10% variants overlapped `r snakemake@wildcards$pred` enhancers
-with the fraction at which all common variants overlap `r snakemake@wildcards$pred` enhancers
-in that cell type. We calculated the latter using common variants in the
-1000 Genomes Projects as described in the ‘Stratified linkage disequilibrium score regression’ section. For each trait, we defined a biosample as significantly enriched for that trait if the Bonferroni-corrected
-binomial P value was <0.001.
+For a given trait, we intersected variants with PIP ≥ 10% in noncoding credible sets with `r snakemake@wildcards$pred` enhancers (or other genomic annotations). For each biosample, we calculated a P value using a binomial test comparing the fraction at which PIP ≥ 10% variants overlapped `r snakemake@wildcards$pred` enhancers with the fraction at which all common variants overlap `r snakemake@wildcards$pred` enhancers in that cell type. We calculated the latter using common variants in the 1000 Genomes Projects as described in the ‘Stratified linkage disequilibrium score regression’ section. For each trait, we defined a biosample as significantly enriched for that trait if the Bonferroni-corrected binomial P value was <0.001.
 <br> 
 
-**Comparison of enrichment of fine-mapped variants in enhancer
-regions and other enhancer-gene predictions** <br>
-We compared the enrichment of fine-mapped variants in ABC enhancers and other enhancer definitions. . We analysed
+**Comparison of enrichment of fine-mapped variants in enhancer regions and other enhancer-gene predictions** <br>
+We compared the enrichment of fine-mapped variants in ABC enhancers and other enhancer definitions. We analysed
 each of the previous studies from Fig 1d (summary plot) reporting cell-type specific enhancer-gene predictions.  For each of the methods below, we downloaded previous predictions of enhancer–gene links and assessed
-their ability to identify disease-associated genes. . For this analysis, we used the predictions from each method to overlap fine-mapped variants
-(PIP ≥ 10%) with enhancers in any cell type and assigned variants to the predicted gene(s).
+their ability to identify disease-associated genes. For this analysis, we used the predictions from each method to overlap fine-mapped variants (PIP ≥ 10%) with enhancers in any cell type and assigned variants to the predicted gene(s).
 <br>
 
+**Calculating the number of enriched celltypes (p < 0.05)**<br>
+Number of enriched celltypes where the enrichment of fine-mapped variants (PIP >= 10%) in enhancers are considered significant (p < 0.05) across all traits. 
+
+**Enhancer-gene correlation (Activity-By-Contact)** <br>
+DNase accessibility and acetylation of H3K27 are commonly used to identify enhancer elements, and are predictive of the expression of nearby genes and enhancer activity in plasmid-based reporter assays. The geometric mean of DNase-seq and H3K27ac ChIP–seq signals was used to calculate Activity. Contact component of the ABC score for E–G pairs from Hi-C data (when available) or the Average Hi-C data across 10 CellTypes, which was proven to an accurate substitute when celltype specific Hi-C data is not available. To calculate the relative effect of each element to the expression of a gene, we normalized the Activity by Contact of one element for a given gene to the sum of the Activity by Contact of other nearby elements. We included all elements within 5 Mb of the gene’s promoter in this calculation.
+Reference: https://www.nature.com/articles/s41588-019-0538-0
+
 **Enhancer-gene correlation (ChromHMM2017)** <br>
-Gene expression was previously correlated with five active chromatin marks (H3K27ac,
-H3K9ac, H3K4me1, H3K4me2 and DNase I hypersensitivity) across 56
-biosamples, and these correlation links were then used to make predictions for the predicted enhancers (regions with the ‘7Enh’ ChromHMM
-state) in 127 biosamples from the Roadmap Epigenome Atlas. We
-downloaded these predictions from www.biolchem.ucla.edu/labs/
-ernst/roadmaplinking and made predictions using the confidence score.
+Gene expression was previously correlated with five active chromatin marks (H3K27ac, H3K9ac, H3K4me1, H3K4me2 and DNase I hypersensitivity) across 56 biosamples, and these correlation links were then used to make predictions for the predicted enhancers (regions with the ‘7Enh’ ChromHMM state) in 127 biosamples from the Roadmap Epigenome Atlas. We downloaded these predictions from www.biolchem.ucla.edu/labs/ernst/roadmaplinking and made predictions using the confidence score.
+Reference: https://www.nature.com/articles/nprot.2017.124
 
 <br>
 **Enhancer-gene correlation (EpiMap)** <br>
-Gene expression was previously correlated with five active chromatin marks (H3K27ac,
-H3K9ac, H3K4me1, H3K4me2 and H3K4me3) across 304 biosamples. A negative set of correlations for each enhancer was computed using random genes in a different chromosome. We predicted links for each biosample and ChromHMM enhancer state separately (states E7, E8, E9, E10, E11 and E15). Predictions were made by training an XGBoost classifier on the positive set of all valid links against their paired negative links, using precomputed correlations and distance to the transcription start site as features, and keeping all links with a probability above 5/7. We downloaded these predictions from https://personal.broadinstitute.org/cboix/epimap/links/. 
+Gene expression was previously correlated with five active chromatin marks (H3K27ac, H3K9ac, H3K4me1, H3K4me2 and H3K4me3) across 304 biosamples. A negative set of correlations for each enhancer was computed using random genes in a different chromosome. We predicted links for each biosample and ChromHMM enhancer state separately (states E7, E8, E9, E10, E11 and E15). Predictions were made by training an XGBoost classifier on the positive set of all valid links against their paired negative links, using precomputed correlations and distance to the transcription start site as features, and keeping all links with a probability above 5/7. We downloaded these predictions from https://personal.broadinstitute.org/cboix/epimap/links/. 
+Reference: https://www.biorxiv.org/content/10.1101/810291v2
 <br> 

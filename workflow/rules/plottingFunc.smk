@@ -118,6 +118,7 @@ rule plotFractionOverlapPosteriorProb:
 	
 	output:
 		tsv = os.path.join(config["outDir"], "{pred}/EnrichmentVsPosteriorProb.tsv"),
+		noncoding = os.path.join(config["outDir"], "{pred}/EnrichmentVsPosteriorProb.nonCoding.tsv"),
 		pdf = os.path.join(config["outDir"], "{pred}/EnrichmentVsPosteriorProb.pdf")
 	
 	params:
@@ -146,8 +147,7 @@ rule plotIndividualGenePrecisionRecall:
 		genePredTable = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.tsv",outdir=config["outDir"]),
 		knownGenes = lambda wildcard: str(config["predDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
 	output:
-		prPdf = os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf"),
-#		prPdf = report(os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf"), caption="../report/GenePrecisionRecall.rst", category="Precision and Recall", subcategory="{trait}/{pred}")
+		prPdf = os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf")
 	params:
 		codeDir = config["codeDir"],
 		projectDir = config["projectDir"]
@@ -167,8 +167,7 @@ rule plotGenePrecisionRecall:
 		genePredTable = expand("{outdir}{pred}/{{trait}}/GenePredictions.allCredibleSets.tsv", pred=all_predictions, outdir=config["outDir"]),
 		knownGenes = lambda wildcard: str(config["predDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
 	output:
-		prPdf = os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"),
-#		prPdf = report(os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"), caption="../report/GenePrecisionRecall.Agg.rst", category="Precision and Recall", subcategory="{trait}")
+		prPdf = os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf")
 	params:
 		codeDir = config["codeDir"],
 		projectDir = config["projectDir"]
@@ -190,8 +189,6 @@ rule plotAggregate_cdf:
 	output:
 		outfile = os.path.join(config["outDir"], "GWAS.{trait}.cdf.pdf"),
 		outDensity = os.path.join(config["outDir"], "GWAS.{trait}.density.pdf")
-#		outDensity = report(os.path.join(config["outDir"], "GWAS.{trait}.density.pdf"), caption="../report/GWAS.density.rst", category="Enrichment Density Plots", subcategory="{trait}"),
-#		outfile = report(os.path.join(config["outDir"], "GWAS.{trait}.cdf.pdf"), caption="../report/GWAS.cdf.rst", category="Enrichment Density Plots", subcategory="{trait}")
 	params:
 		codeDir = config["codeDir"],
 		predictors = all_predictions,
@@ -233,44 +230,84 @@ rule plottingReport:
 	message: "Compiling R Markdown report in html format"
 	script: os.path.join(config["codeDir"], "plottingFuncReport.Rmd")
 
-rule plottingAggregateReport:
-        input:
-                allgenePredTable = expand("{outdir}{{pred}}/{trait}/GenePredictions.allCredibleSets.Dedup.tsv",outdir=config["outDir"], trait=all_traits),
+rule getAggregateReport_input:
+	input:
+		enrichmentFiles = expand("{outdir}{{pred}}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv", outdir=config['outDir'], trait=all_traits)
+	params:
+		codeDir = config["codeDir"],
+		pred = "{pred}", 
+		outDir = os.path.join(config["outDir"], "{pred}/")
+	output:
+		outfile = os.path.join(config["outDir"], "{pred}/{pred}_aggregateTraitEnrichment.tsv")
+	run:
+		shell(
+			"""
+			Rscript {params.codeDir}/plot_all_traits.R \
+			--enrichmentTables "{input.enrichmentFiles}" \
+			--outDir {params.outDir} \
+			--pred "{params.pred}" \
+			--outfile {output.outfile}
+			""")	
+
+rule getAggregatePR_input:
+	input:
+		allgenePredTable = expand("{outdir}{{pred}}/{trait}/GenePredictions.allCredibleSets.Dedup.tsv",outdir=config["outDir"], trait=all_traits),
 		knownGenes = expand("{outdir}GeneLists.{trait}.txt",outdir=config["traitDir"], trait=all_traits),
-                enrichmentFiles = expand("{outdir}{{pred}}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv", outdir=config['outDir'], trait=all_traits),
-                allFlat = expand("{outdir}{{pred}}/{trait}/data/all.flat.tsv", outdir=config["outDir"], trait=all_traits)
-        params:
-                codeDir = config["codeDir"],
-                predictors = all_predictions,
-                outDir = config["outDir"],
+	params:
+		codeDir = config["codeDir"],
+		traitTable = config["traitTable"]
+	output:
+		outfile = expand("{outdir}{{pred}}/{{pred}}_aggregateGenePredictions.allCredibleSets.Dedup.tsv", outdir=config["outDir"]), 
+		aggPRTable = expand("{outdir}{{pred}}/{{pred}}_aggregatePrecisionRecallTable.tsv", outdir=config["outDir"]) 
+	run:
+		shell(
+			"""
+			Rscript {params.codeDir}/plot_aggregate_PR.R \
+			--codeDir {params.codeDir} \
+			--allgenePredTable "{input.allgenePredTable}" \
+			--outfile {output.outfile} \
+			--PRTable {output.aggPRTable} \
+			--traitTable {params.traitTable} \
+			--knownGenes "{input.knownGenes}"
+			""")
+
+rule plottingAggregateReport:
+	input:
+		allgenePredTable = expand("{outdir}{{pred}}/{{pred}}_aggregateGenePredictions.allCredibleSets.Dedup.tsv", outdir=config["outDir"]),
+		PRtable = expand("{outdir}{{pred}}/{{pred}}_aggregatePrecisionRecallTable.tsv", outdir=config["outDir"]),
+		enrichmentFiles = expand("{outdir}{pred}/{pred}_aggregateTraitEnrichment.tsv", outdir=config["outDir"], pred=all_predictions),
+		enrichedCellTypes = expand("{outdir}{{pred}}/{{pred}}_numEnrichedCellTypesPerTrait.tsv", outdir=config["outDir"]),
+		enrichVsPp_noncoding = expand("{outdir}{{pred}}/EnrichmentVsPosteriorProb.nonCoding.tsv", outdir=config["outDir"])
+	params:
+		codeDir = config["codeDir"],
+		predictors = all_predictions,
+		outDir = config["outDir"],
 		indivOutDir = os.path.join(config["outDir"], "{pred}/"),
-                predDir = config["predDir"],
+		predDir = config["predDir"],
 		traitDir = config["traitDir"],
-                knownGeneMaxDistance = "1000000" ,
-                isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]),
-                cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
-                traitTable = config["traitTable"],
-                outEps = "placeholder.eps"
-        output:
-                html = os.path.join(config["outDir"], "{pred}/GWAS_aggregate_report.html")
-        message: "Compiling R Markdown report in html format"
-        script: os.path.join(config["codeDir"], "plottingAggregateTraits.Rmd")
+		knownGeneMaxDistance = "1000000" ,
+		isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]),
+		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"]
+	output:
+		html = os.path.join(config["outDir"], "{pred}/GWAS_aggregate_report.html")
+	message: "Compiling R Markdown report in html format"
+	script: os.path.join(config["codeDir"], "plottingAggregateTraits.Rmd")
 
 
 rule plotPropertyReport:
 	input:
 		enhancerPredictions = expand("{outdir}{pred}_enhancerRegions_signal_coverage.tsv", outdir=config["resources"], pred=all_predictions), 
 		candidateRegions = expand("{outdir}{pred}_candidateRegions_signal_coverage.tsv", outdir=config["resources"], pred=all_predictions), 
-#		mergeEnhancerRegions = expand("{outdir}{pred}/{pred}.mergedEnhancerRegions.tsv.gz", outdir=config["outDir"], pred=all_predictions),
-#		numGenes = expand("{outdir}{pred}/{pred}.metrics.numGenes.tsv", outdir=config["outDir"], pred=all_predictions), 
-#		numBiosamplesCounts = expand("{outdir}{pred}/{pred}.metrics.numBiosamplesCounts.tsv", outdir=config["outDir"], pred=all_predictions),
-#		totalUniquebp = expand("{outdir}{pred}/{pred}.metrics.uniquebp.tsv", outdir=config["outDir"], pred=all_predictions),
-#		numEGCounts = expand("{outdir}{pred}/{pred}.metrics.numEGCounts.tsv", outdir=config["outDir"], pred=all_predictions)
+		mergeEnhancerRegions = expand("{outdir}{pred}/{pred}.mergedEnhancerRegions.tsv.gz", outdir=config["outDir"], pred=all_predictions),
+		numGenes = expand("{outdir}{pred}/{pred}.metrics.numGenes.tsv", outdir=config["outDir"], pred=all_predictions), 
+		numBiosamplesCounts = expand("{outdir}{pred}/{pred}.metrics.numBiosamplesCounts.tsv", outdir=config["outDir"], pred=all_predictions),
+		totalUniquebp = expand("{outdir}{pred}/{pred}.metrics.uniquebp.tsv", outdir=config["outDir"], pred=all_predictions),
+		numEGCounts = expand("{outdir}{pred}/{pred}.metrics.numEGCounts.tsv", outdir=config["outDir"], pred=all_predictions)
 	params:
 		num_examples = "1000",
 		allpredictions = all_predictions
 	output:
 		html = os.path.join(config["outDir"], "property_aggregate_report.html")
 	message: "Getting enhancer properties" 
-	script: os.path.join(config["codeDir"], "plottingProperties1.Rmd")
+	script: os.path.join(config["codeDir"], "plottingProperties.Rmd")
 	

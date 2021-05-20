@@ -12,7 +12,6 @@ rule filterBackgroundDistalNonCoding:
 			
 			# filter partition to distal noncoding 
 			awk '$4=="ABC" || $4=="AllPeaks" || $4=="Other" || $4=="OtherIntron" || $4=="TSS-500bp"' {input.partition} | sort -k1,1 -k2,2n > {output.partitionDistalNoncoding}
-			
 			# filter common variants to distal noncoding
 		 	cat {input.allVariants} | bedtools intersect -wa -sorted -a stdin -b {output.partitionDistalNoncoding} | sort -k1,1 -k2,2n | gzip > {output.commonVarDistalNoncoding}	
 			""")

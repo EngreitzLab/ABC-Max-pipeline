@@ -32,6 +32,8 @@ library(DT)
 library(htmltools)
 library(reactable)
 library(patchwork)
+library(ggrepel)
+library(ggpubr)
 # set global chunk options
 knitr::opts_chunk$set(echo = FALSE)
 
@@ -57,52 +59,70 @@ pred <- snakemake@wildcards$pred
 # This function takes in *.Enrichment.vsScore.tsv files and outputs enrichment bar plots across different cell categories as defined by catOrder 
 
 # load in inputs
-catOrder <- c("myeloid","Bcell","Tcell","hematopoietic","fibroblast","epithelial","other")
-n <- length(unique(catOrder))
+#catOrder <- c("myeloid","Bcell","Tcell","hematopoietic","fibroblast","epithelial","other")
+#n <- length(unique(catOrder))
 color = grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-catColors <- c("green","orange","blue","purple","pink","brown","gray", sample(color, n-7))
-names(catColors) <- catOrder
-
-# Calculate Number of variants that overlpa 
+#catColors <- c("green","orange","blue","purple","pink","brown","gray", sample(color, n-7))
+#names(catColors) <- catOrder
+#
+## Calculate Number of variants that overlpa 
 cellEnrichment <- transform(cellEnrichment, n.FractionOverlap = n / total)
 cellEnrichment <- transform(cellEnrichment, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
 
-# Set theme of plots
-mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+## Set theme of plots
+mytheme <- theme_classic() + theme(axis.text.y = element_text(angle = 45, vjust = 1, hjust = 1))
 
 enrichPlot <- merge(cellEnrichment, cellCategories[,c("CellType","Categorical.IBDTissueAnnotations2")], by="CellType")
 ibdEnhancerList <- merge(cellCategories, enrichPlot[, c("CellType", "enrichment", "enrichment.NoPromoters", "n.noPromoters.FractionOverlap", "n.FractionOverlap")], by="CellType")
-ibdEnhancerList$CellCat <- ordered(ibdEnhancerList$Categorical.IBDTissueAnnotations2, levels=catOrder)
-ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(cellCategories[order(cellCategories$Categorical.IBDTissueAnnotations2),"CellType"]))
+#ibdEnhancerList$CellCat <- ordered(ibdEnhancerList$Categorical.IBDTissueAnnotations2, levels=catOrder)
 
-formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=catColors) + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=10), legend.position='none')
+formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + xlim(0, 22) + mytheme + geom_vline(xintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=10) , axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
 
-p1 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment.NoPromoters, fill=CellCat, label=CellType)) + ylab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + labs(title=paste0("Enhancers (excluding promoter regions)")) + ylab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + xlab("")
+cellTypeLabels <- head(ibdEnhancerList[order(ibdEnhancerList$enrichment.NoPromoters, decreasing=TRUE), ], 10)
+cellTypeLabels_df <- cellTypeLabels$CellType
+
+ibdEnhancerList$title1 <- "Enhancers (excluding promoter regions)"
+ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(ibdEnhancerList[order(ibdEnhancerList$enrichment.NoPromoters),"CellType"]))
+num=length(ibdEnhancerList$CellType) - 10
+#my_palette = brewer.pal(10, "Paired")
+p1 <- ggplot(ibdEnhancerList, aes(x=enrichment.NoPromoters, y=CellType, color=CellType, fill=CellType)) + facet_wrap(~title1) + xlab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + ylab("") + scale_color_manual(breaks=cellTypeLabels_df, values=c(c("#1b9e77","#d95f02","#7570b3","#a6cee3", "#1f78b4", "#b2df8a", "#fdc086", "#e41a1c", "#fc8d62", "#8da0cb"), c(rep("#636363",num)))) + scale_fill_manual(breaks=cellTypeLabels_df, values=c(c("#1b9e77","#d95f02","#7570b3","#a6cee3", "#1f78b4", "#b2df8a", "#fdc086", "#e41a1c", "#fc8d62", "#8da0cb"), c(rep("#636363",num)))) #+ geom_label(data=cellTypeLabels, aes(label=CellType)) + geom_label_repel() 
 p1 <- p1 %>% formatEnrichmentBarPlot()
+p1_label <- p1 + theme(legend.position = "none")
 ```
 
 ```{r plottingEnrichmentCode_all, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
-p2 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment, fill=CellCat, label=CellType)) + ylab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + labs(title=paste0("Enhancers (including promoter regions)")) 
+ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(ibdEnhancerList[order(ibdEnhancerList$enrichment),"CellType"]))
+ibdEnhancerList$title2 <- "Enhancers (including promoter regions)"
+p2 <- ggplot(ibdEnhancerList, aes(x=enrichment, y=CellType, fill=CellType)) + xlab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + facet_wrap(~title2) #+ geom_label(data=cellTypeLabels, aes(label=CellType))
 p2 <- p2 %>% formatEnrichmentBarPlot()
+p2_label <- p2 + theme(legend.position = "none")
 ```
 
 ```{r plottingFractionOverlap, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
-formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + scale_y_continuous(limits = c(0, 0.20)) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=catColors) + scale_color_hue(l=50, c=90) + theme(legend.position='none')
+formatFractionBarPlot <- function(p) p + geom_jitter(position=position_jitter(0.2), size=3) +  mytheme + scale_color_hue(l=50, c=90) + theme(axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
 
-p3 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=n.noPromoters.FractionOverlap, fill = CellCat, label=CellType)) + ylab(paste0("Fraction Overlap\n( ", trait, " variants / all variants)")) + ggtitle(paste0("Enhancers (excluding promoter regions)")) 
-p3 <- p3 %>% formatEnrichmentBarPlot()
+ibdFractionOverlap <- ibdEnhancerList
+FracLabels <- head(ibdFractionOverlap[order(ibdFractionOverlap$n.noPromoters.FractionOverlap, decreasing=TRUE), ], 10)
+FracLabels_df <- FracLabels$CellType
+ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(ibdEnhancerList[order(ibdEnhancerList$n.noPromoters.FractionOverlap),"CellType"]))
+p3 <- ggplot(ibdEnhancerList, aes(x=n.noPromoters.FractionOverlap, y=CellType, color = CellType, fill = CellType)) + xlab(paste0("Fraction Overlap\n( ", trait, " variants / all variants)")) + facet_wrap(~title1) + scale_color_manual(breaks=FracLabels_df, values=c(c("#1b9e77","#d95f02","#7570b3","#a6cee3", "#1f78b4", "#b2df8a", "#fdc086", "#e41a1c", "#fc8d62", "#8da0cb"), c(rep("#636363",num)))) + scale_fill_manual(breaks = FracLabels_df, values=c(c("#1b9e77","#d95f02","#7570b3","#a6cee3", "#1f78b4", "#b2df8a", "#fdc086", "#e41a1c", "#fc8d62", "#8da0cb"), c(rep("#636363",num))))
+p3 <- p3 %>% formatFractionBarPlot() + scale_x_continuous(limits = c(0, max(ibdFractionOverlap$n.noPromoters.FractionOverlap))) 
+p3_label <- p3 + theme(legend.position = "none") #+ geom_label_repel(data=cellTypeLabels, aes(x=CellType, y=n.noPromoters.FractionOverlap, label=CellType))
 ```
 
 
 ```{r plottingFractionOverlap_all, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE, fig.width=6, fig.height=4}
-p4 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=n.FractionOverlap, fill = CellCat, label=CellType)) + ylab(paste0("Fraction Overlap\n( ", trait, " variants / all variants)")) + ggtitle(paste0("Enhancers (including promoter regions)")) 
-p4 <- p4 %>% formatEnrichmentBarPlot()
+ibdFractionOverlap$CellType <- ordered(ibdFractionOverlap$CellType, levels=rev(ibdFractionOverlap[order(ibdFractionOverlap$n.FractionOverlap),"CellType"]))
+p4 <- ggplot(ibdFractionOverlap, aes(x=n.FractionOverlap, y=CellType, fill = CellType)) + xlab(paste0("Fraction Overlap\n( ", trait, " variants / all variants)")) + facet_wrap(~title2) #+ geom_label_repel(data=cellTypeLabels, aes(label=CellType))
+p4 <- p4 %>% formatFractionBarPlot() + scale_x_continuous(limits = c(0, max(ibdFractionOverlap$n.noPromoters.FractionOverlap)))
+p4_label <- p4 + theme(legend.position = "none")
 ```
 
 ```{r plotIndividualGenePrecisionRecall, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
 
 gp <- read.delim(snakemake@input$genePredTable, header=T, check.names=F, stringsAsFactors=F, comment.char='#')
 predictors <- colnames(gp)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp))]
+
 mytheme <- theme_classic() #+ theme(
                            #       axis.text = element_text(size = 13),
                            #       axis.title = element_text(size = 15))
@@ -121,11 +141,17 @@ getPRTable <- function(gp, pred.cols) {
 }
 
 getPRPlot <- function(pr, baseline=NULL, xlab="Recall") {
+      #PredictionType <- strsplit(pr$Method, split = ".")
       pr <- pr %>% group_by(Method) %>% mutate(n=n())
+      pr <- separate(data = pr, col = Method, into = c("PredictionType", "Predictor"), sep = "\\.")
+      cg_index <- grep("Closest Gene", pr$PredictionType)
+      ct_index <- grep("Closest TSS", pr$PredictionType)
+      pr$Predictor[cg_index] <- "Closest Gene"
+      pr$Predictor[ct_index] <- "Closest TSS"
       #pr <- pr[order(pr$Method), ]
       pr.points <- pr %>% filter(n==1)
       pr.lines <- pr %>% filter(n>1)
-      p <- ggplot(pr.points, aes(x=Recall, y=Precision, color=Method))
+      p <- ggplot(pr.points, aes(x=Recall, y=Precision, shape=PredictionType, color=Predictor))
       if (!is.null(baseline)) p <- p + geom_hline(yintercept=baseline, color='gray', linetype='dashed')
       p <- p + geom_point(size=3)
       #p <- p + geom_line(data=pr.lines)
@@ -165,7 +191,7 @@ if (length(names) > 1){
 	       gp.all = merge(gp.all, temp, by=mergecols)
 	}
 }
-#
+
 predictors <- colnames(gp.all)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp.all))]
 for (gl in colnames(knownGenes))
 	gp.plot <- doOneKnownGeneList(gl, gp.all, predictors, maxKnownGenes=length(knownGenes))
@@ -190,7 +216,7 @@ enr.all = enr.all[order(enr.all$enrichment.NoPromoters),]
 #if (!is.na(snakemake@params$filterCellTypes)){
 #       cells = read.csv(file=opt$filterCellTypes, sep='\t', header=TRUE, stringsAsFactors = FALSE)
 #        enr.all = enr.all[enr.all$CellType %in% cells$cell, ]
-#}
+#}/
 formatAccumulatedBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=12), axis.text.x=element_text(angle=60,hjust=1), legend.position='none')
 
 fig1 = ggplot(enr.all, aes(enrichment.NoPromoters, col=predictionSet)) +
@@ -225,23 +251,21 @@ fig2a <- fig2a %>% formatAccumulatedBarPlot()
 This report shows summary statistics produced by the disease variant validation pipeline for predictions made by **`r snakemake@wildcards$pred`**. <br>
 The following report is done for **`r snakemake@wildcards$trait`** traits. <br>
 
-```{r summary,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, fig.width=18, fig.height=10}
+```{r summary,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, fig.width=18, fig.height=5}
 
-#AB <- subplot(p1 + ggtitle("A") + theme(plot.title = element_text(hjust = -0.45, vjust=2.12)), p3 + ggtitle("B") + theme(plot.title = element_text(hjust = -0.45, vjust=2.12)), nrows=1, titleX = TRUE, titleY = TRUE, margin = 0.07)
-#CD <- subplot(p + ggtitle("C") + theme(plot.title = element_text(hjust = -0.45, vjust=2.12)), singlePR + ggtitle("D") + theme(plot.title = element_text(hjust = -0.45, vjust=2.12)), nrows=1, titleX = TRUE, titleY = TRUE, margin = 0.07)
-#DE <- subplot(fig2 + ggtitle("E") + theme(plot.title = element_text(hjust = -0.45, vjust=2.12)) , fig2a + ggtitle("F") + theme(plot.title = element_text(hjust = -0.45, vjust=2.12)), nrows=1, titleX = TRUE, titleY = TRUE, margin = 0.07)
-
-p1_title <- p1 + ggtitle('A') 
-p3_title <- p3 + ggtitle('B') 
+p1_title <- p1 
+p3_title <- p3 
 singlePR_title <- singlePR + ggtitle('C') 
 aggCurve_title <- aggCurve + ggtitle('D') 
 fig2_title <- fig2 + ggtitle('E') 
 fig2a_title <- fig2a + ggtitle('F') 
 
-patchwork <- ( p1_title + p3_title + singlePR_title ) / (aggCurve_title + fig2_title + fig2a_title)
-patchwork 
+ggarrange(p1_title, p3_title, labels=c("A", "B"), nrow=1)
 ```
-
+```{r summary1, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=8} 
+patchwork <- (singlePR_title + aggCurve_title + fig2_title + fig2a_title)
+patchwork
+```
 <br>
 **Fig1. `r snakemake@wildcards$pred` maps connecting fine-mapped variants to enhancer, genes and celltypes. a**, Enrichment of fine-mapped `r snakemake@wildcards$trait` variants (PIP>10%) in `r snakemake@wildcards$pred` enhancers. **b**, Fraction of fine-mapped `r snakemake@wildcards$trait` variants (PIP>10%) overlapping `r snakemake@wildcards$pred` enhancers. **c**,  Fraction of noncoding variants above a given PIP threshold that overlap an `r snakemake@wildcards$pred` enhancer in any biosample. Black line, weighted average across all traits. Traces are shown for PIP thresholds above which there are at least five variants. Dashed line, fraction of all common noncoding variants that overlap  `r snakemake@wildcards$pred` enhancers." **d**,  Precision–recall plot of connections between noncoding `r snakemake@wildcards$trait`  credible sets and known `r snakemake@wildcards$trait`-associated genes. **e**, cumulative density plot of enrichment of `r snakemake@wildcards$trait` variants across all predictors. **f**, density plot of enrichment of `r snakemake@wildcards$trait` variants across all predictors.
 <br>
@@ -253,9 +277,9 @@ These barplots calculates the enrichment for fine-mapped `r snakemake@wildcards$
 
 ```{r enrichmentplot1, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap}
 
-ptly1 <- ggplotly(p1)
-ptly2 <- ggplotly(p2)
-subplot(ptly1, ptly2, nrows=1, shareX = TRUE, shareY = TRUE)
+ptly1 <- ggplotly(p1_label)
+ptly2 <- ggplotly(p2_label)
+subplot(ptly1, ptly2, nrows=1, titleX = TRUE)
 cap <- paste0("Fig2. Enrichment of fine-mapped ",trait," variants (PIP >= 10%) in enhancers (including promoter regions) across all biosamples. \n Box plots show median (middle line) and interquartile range (boxes) and whiskers show observations less than or equal to quartiles ± 1.5× the interquartile range.")
 ```
 
@@ -286,9 +310,9 @@ cat("  \n")
 We plot the fraction overlap of `r snakemake@wildcards$trait` variants (PIP >= 10%) that overlap `r snakemake@wildcards$pred` enhancers and enhancers without promoter regions (promoter regions as defined by RefSeq) across all biosamples.
 
 ```{r enrichmentplot3, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap}
-ptly3 <- ggplotly(p3)
-ptly4 <- ggplotly(p4)
-subplot(ptly3, ptly4, nrows=1, shareX = TRUE, shareY = TRUE)
+ptly3 <- ggplotly(p3_label)
+ptly4 <- ggplotly(p4_label)
+subplot(ptly3, ptly4, nrows=1, titleX = TRUE)
 cap <- paste0("Fig3. Fraction overlap of fine-mapped ",trait," variants (PIP >= 10%) in \n enhancers (including promoter regions) across all biosamples. Box plots show median (middle line) and interquartile range (boxes) and whiskers show observations less than or equal to quartiles ± 1.5× the interquartile range.")
 ```
 
