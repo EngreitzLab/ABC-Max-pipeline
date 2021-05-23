@@ -97,11 +97,11 @@ rule computeBackgroundOverlap_noPromoters:
 
 rule createVarFiles:
 	input:
-		varList = lambda wildcard: config["traitDir"]+trait_config_file.loc[wildcard.trait, "varList"]
+		varList = lambda wildcard: config["traitDir"]+trait_config_file.loc[wildcard.trait, "varList"],
+		partitionDistalNoncoding = os.path.join(config["outDir"], "Parititon.distalNoncoding.bed")
 	output:
 		varBed = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.bed"),
 		varBedgraph = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.bedgraph"),
-		sigvarList = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.sig.varList.tsv"),
 	log: os.path.join(config["logDir"], "{trait}.{pred}.createbed.log")
 	params:
 		varFilterCol = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterCol"],
@@ -110,40 +110,15 @@ rule createVarFiles:
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/")
 	message: "Creating variant BED files"
 	run:
-		if {params.varFilterCol} is not None:
-			shell(
-				"""
-				# make output dir 
-				if [ ! -d {params.outDir} ]
-                       		then
-                                	mkdir {params.outDir}
-                        	fi
-				# Subsetting the variant list based on significance
-				# Finding the score colum
-				#scoreCol=$(awk -v RS='\\t' '/{params.varFilterCol}/{{print NR; exit}}' {input.varList});
-
-				# Filtering to retain variants exceeding the threshold
-				cat {input.varList} | csvtk -t filter -f "{params.varFilterCol}>={params.varFilterThreshold}" > {output.sigvarList};
-	
-				# Creating the bed file
-				# Finding and cutting chr, position, and variant columns
-				# TODO: do not require start and stop, only position?
-				cat {output.sigvarList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 | sed -e 's/8.1e+07/81000000/g' | sort -k1,1 -k2,2n > {output.varBed};
-
-				# Ensure that variants are sorted for bedtools -sorted overlap algorithm
-				cat {output.varBed} | bedtools sort -i stdin -faidx {params.chrSizes} | uniq > {output.varBedgraph};
-				""")
-		else:
-			shell(
-				"""
-				#fi
-				# Creating the bed file for all variants
-				# Finding and cutting chr, pos, and var columns
-				cat {input.varList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 | | sort -k1,1 -k2,2n | bedtools intersect -wa -sorted -a stdin -b {input.partitionDistalNoncoding} > {output.varBed};
-
-				# Ensure that variants are sorted for bedtools -sorted overlap algorithm
-				cat {output.varBed} | bedtools sort -i stdin -faidx {params.chrSizes} | uniq > {output.varBedgraph};
-				""")
+		shell(
+			"""
+			set +o pipefail;
+			# Creating the bed file for all variants
+			# Finding and cutting chr, pos, and var columns
+			cat {input.varList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 | sort -k1,1 -k2,2n | bedtools intersect -wa -sorted -a stdin -b {input.partitionDistalNoncoding} > {output.varBed};
+			# Ensure that variants are sorted for bedtools -sorted overlap algorithm
+			cat {output.varBed} | bedtools sort -i stdin -faidx {params.chrSizes} | uniq > {output.varBedgraph};
+			""")
 	
 
 rule overlapVariants:

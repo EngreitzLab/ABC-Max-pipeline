@@ -12,7 +12,10 @@ option.list <- list(
 	make_option("--datadir", type="character", help="Data directory"),
 	make_option("--traitTable", type="character", help="name of trait parameter file"), 
 	make_option("--trait", type="character", help="trait", default="IBD"),
-	make_option(c("-o", "--outdir"), type="character", help="name for pdf output file"))
+	make_option(c("-o", "--outdir"), type="character", help="name for pdf output file"),
+	make_option("--outfile", type="character", help="File showing enrichment with varying PP"),
+	make_option("--pdf", type="character", help="Pdf file showing enrichment with varying PP"),
+	make_option("--outfile_noncoding", type="character", help="File showing enrichment with varying PP using only noncoding variants"))
 
 # example of these scripts 
 # geneFeatures -- generated from log.SummaryProperties.R to get genePredictions == for all diseases, get directory of ABCOverlap
@@ -75,13 +78,14 @@ final.flat.v <- NULL #final.flat.full %>% select(-CellType) %>% unique()
 
 ppBreaks <- c(0,0.0001,0.001,seq(0.01,1,0.01))
 dzs <- unique(all.flat.v$Disease); dzs <- dzs[!(dzs %in% c("IBD+UC","IBD+CD"))]
-#enrichVsPp <- getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v)
-#enrichVsPp.byDisease <- do.call(rbind, lapply(dzs, function(dz) getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, dz=dz)))
-#enrichVsPp <- rbind(enrichVsPp, enrichVsPp.byDisease)
-#write.table(enrichVsPp, file=paste0(opt$outdir, "/EnrichmentVsPosteriorProb.tsv"), sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
+enrichVsPp <- getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v)
+enrichVsPp.byDisease <- do.call(rbind, lapply(dzs, function(dz) getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, dz=dz)))
+enrichVsPp <- rbind(enrichVsPp, enrichVsPp.byDisease)
+write.table(enrichVsPp, file=opt$outfile, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
+
 enrichVsPp.noncoding <- getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, noncodingOnly=TRUE)
 enrichVsPp.noncoding <- rbind(enrichVsPp.noncoding, do.call(rbind, lapply(dzs, function(dz) getAllVariantEnrichment(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, dz=dz, noncodingOnly=TRUE))))
-write.table(enrichVsPp.noncoding, file=paste0(opt$outdir, "/EnrichmentVsPosteriorProb.nonCoding.tsv"), sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
+write.table(enrichVsPp.noncoding, file=opt$outfile_noncoding, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
 
 # 04122021 KSM: set this as an input instead of hardcoded 
 bloodRelatedTraits <- c("Baso","Eosino","Hb","LOY","Lym","MCH","MCHC","MCV","Mono","Neutro","RBC","WBC")
@@ -92,7 +96,7 @@ mytheme <- theme_classic() + theme(axis.text = element_text(size = 13), axis.tit
 
 # PLOT 
 {
-  pdf(file=paste0(opt$outdir, "/EnrichmentVsPosteriorProb.pdf"), width=5, height=5)
+  pdf(file=opt$pdf, width=5, height=5)
 #  p <- ggplot(enrichVsPp, aes(x=log10(PosteriorProb), y=enrichment, group=Disease)) + geom_line(color='gray') + xlab("PIP (log10)") + ylab("Enrichment") + ylim(1,NA) + ggtitle("ABC Enhancers, all traits") + mytheme
 #  p <- p + geom_line(data=subset(enrichVsPp,Disease=="All"), aes(x=log10(PosteriorProb), y=enrichment), color='black')
 #  p <- p + geom_line(data=subset(enrichVsPp,Disease==trait), aes(x=log10(PosteriorProb), y=enrichment), color='red')

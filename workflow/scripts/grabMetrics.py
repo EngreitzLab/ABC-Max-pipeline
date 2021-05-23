@@ -10,9 +10,7 @@ from multiprocessing import Pool
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--predFile', required=True, help="merged Enhancer Prediction file"), 
-    parser.add_argument('--outPredFile', required=True, help="merged Enhancer Prediction file with additional col illustrating the number of biosamples with a similar E-G connection"),
     parser.add_argument('--totalUniqueBp', required=True, help="metrics file to store # of total unique bp"),
-    parser.add_argument('--numBiosamples', required=True, help="metrics file to store # of biosamples with similar EG connection"),
     parser.add_argument('--genes', required=True, help="File with gene bodies"),
     parser.add_argument('--numGenes', required=True, help="metrics file to store # genes with a predicted enhancer in another biosample"),
     parser.add_argument('--numEGCounts', required=True, help="num EnhancerGene counts txtfile"),
@@ -115,21 +113,6 @@ def grabMetrics(args):
     print("Done!")
     endtime1 = time.time()
     print("Finished grabbing all metrics:{}".format(str(endtime1-starttime1)))
-
-    print("Saved first metrics file")
-    id_genes = np.concatenate((data['Genes']), axis=None)
-    concatenated = np.concatenate((data['numBiosamplesConnectedToSameGene']), axis=None)
-#    data.to_csv(args.outPredFile, sep="\t", index=False)
-    print("Saved second metrics file")
-    if not os.path.isfile(args.numBiosamples):
-        concat = pd.DataFrame()
-        concat['id'] = id_genes
-        concat['Biosample'] = np.concatenate((data['Biosample']), axis=None)
-        concat['val'] = concatenated
-        concat.to_csv(args.numBiosamples, sep="\t", index=False)
-    print("Saved concatenated numBiosamples file")
-    
-    print("Saved final metrics file")
 if __name__=="__main__":
     args = parse_args()
     grabMetrics(args)

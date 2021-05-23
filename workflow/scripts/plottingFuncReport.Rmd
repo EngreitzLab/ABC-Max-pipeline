@@ -35,7 +35,7 @@ library(patchwork)
 library(ggrepel)
 library(ggpubr)
 # set global chunk options
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, warnings=FALSE)
 
 #source(file.path(snakemake@params$codeDir, "PlotCellTypeEnrichment.R"))
 #source(file.path(snakemake@params$codeDir, "PlotEnrichmentAggregate.R"))
@@ -78,44 +78,38 @@ ibdEnhancerList <- merge(cellCategories, enrichPlot[, c("CellType", "enrichment"
 
 formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + xlim(0, 22) + mytheme + geom_vline(xintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=10) , axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
 
-cellTypeLabels <- head(ibdEnhancerList[order(ibdEnhancerList$enrichment.NoPromoters, decreasing=TRUE), ], 10)
-cellTypeLabels_df <- cellTypeLabels$CellType
 
 ibdEnhancerList$title1 <- "Enhancers (excluding promoter regions)"
 ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(ibdEnhancerList[order(ibdEnhancerList$enrichment.NoPromoters),"CellType"]))
-num=length(ibdEnhancerList$CellType) - 10
-#my_palette = brewer.pal(10, "Paired")
-p1 <- ggplot(ibdEnhancerList, aes(x=enrichment.NoPromoters, y=CellType, color=CellType, fill=CellType)) + facet_wrap(~title1) + xlab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + ylab("") + scale_color_manual(breaks=cellTypeLabels_df, values=c(c("#1b9e77","#d95f02","#7570b3","#a6cee3", "#1f78b4", "#b2df8a", "#fdc086", "#e41a1c", "#fc8d62", "#8da0cb"), c(rep("#636363",num)))) + scale_fill_manual(breaks=cellTypeLabels_df, values=c(c("#1b9e77","#d95f02","#7570b3","#a6cee3", "#1f78b4", "#b2df8a", "#fdc086", "#e41a1c", "#fc8d62", "#8da0cb"), c(rep("#636363",num)))) #+ geom_label(data=cellTypeLabels, aes(label=CellType)) + geom_label_repel() 
+p1 <- ggplot(ibdEnhancerList, aes(x=enrichment.NoPromoters, y=CellType, color=CellType)) + facet_wrap(~title1) + xlab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + geom_label_repel(data = head(ibdEnhancerList[order(-ibdEnhancerList$enrichment.NoPromoters),], 10), aes(label = CellType), color = "black") + theme(legend.position="none")	
 p1 <- p1 %>% formatEnrichmentBarPlot()
-p1_label <- p1 + theme(legend.position = "none")
+p1_label <- p1 
 ```
 
 ```{r plottingEnrichmentCode_all, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
-ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(ibdEnhancerList[order(ibdEnhancerList$enrichment),"CellType"]))
+#ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(ibdEnhancerList[order(ibdEnhancerList$enrichment),"CellType"]))
 ibdEnhancerList$title2 <- "Enhancers (including promoter regions)"
-p2 <- ggplot(ibdEnhancerList, aes(x=enrichment, y=CellType, fill=CellType)) + xlab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + facet_wrap(~title2) #+ geom_label(data=cellTypeLabels, aes(label=CellType))
+p2 <- ggplot(ibdEnhancerList, aes(x=enrichment, y=CellType, color=CellType)) + xlab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + facet_wrap(~title2) + theme(legend.position="none") #+ geom_label_repel(data = head(ibdEnhancerList[order(-ibdEnhancerList$enrichment),], 10), aes(label = CellType), color = "black") + theme(legend.position="none")
 p2 <- p2 %>% formatEnrichmentBarPlot()
-p2_label <- p2 + theme(legend.position = "none")
+p2_label <- p2 
 ```
 
 ```{r plottingFractionOverlap, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
-formatFractionBarPlot <- function(p) p + geom_jitter(position=position_jitter(0.2), size=3) +  mytheme + scale_color_hue(l=50, c=90) + theme(axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
+formatFractionBarPlot <- function(p) p + geom_jitter(position=position_jitter(0.2), size=3) +  mytheme + scale_color_hue(l=50, c=90) + theme(axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank()) + theme(legend.position="none")
 
 ibdFractionOverlap <- ibdEnhancerList
-FracLabels <- head(ibdFractionOverlap[order(ibdFractionOverlap$n.noPromoters.FractionOverlap, decreasing=TRUE), ], 10)
-FracLabels_df <- FracLabels$CellType
-ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(ibdEnhancerList[order(ibdEnhancerList$n.noPromoters.FractionOverlap),"CellType"]))
-p3 <- ggplot(ibdEnhancerList, aes(x=n.noPromoters.FractionOverlap, y=CellType, color = CellType, fill = CellType)) + xlab(paste0("Fraction Overlap\n( ", trait, " variants / all variants)")) + facet_wrap(~title1) + scale_color_manual(breaks=FracLabels_df, values=c(c("#1b9e77","#d95f02","#7570b3","#a6cee3", "#1f78b4", "#b2df8a", "#fdc086", "#e41a1c", "#fc8d62", "#8da0cb"), c(rep("#636363",num)))) + scale_fill_manual(breaks = FracLabels_df, values=c(c("#1b9e77","#d95f02","#7570b3","#a6cee3", "#1f78b4", "#b2df8a", "#fdc086", "#e41a1c", "#fc8d62", "#8da0cb"), c(rep("#636363",num))))
+#ibdFractionOverlap$CellType <- ordered(ibdFractionOverlap$CellType, levels=rev(ibdFractionOverlap[order(ibdFractionOverlap$n.noPromoters.FractionOverlap),"CellType"]))
+p3 <- ggplot(ibdFractionOverlap, aes(x=n.noPromoters.FractionOverlap, y=CellType, color = CellType)) + xlab(paste0("Fraction Overlap\n( ", trait, " variants / all variants)")) + facet_wrap(~title1) + geom_label_repel(data = head(ibdFractionOverlap[order(-ibdFractionOverlap$n.noPromoters.FractionOverlap),], 10), aes(label = CellType), color = "black") + theme(legend.position="none")
 p3 <- p3 %>% formatFractionBarPlot() + scale_x_continuous(limits = c(0, max(ibdFractionOverlap$n.noPromoters.FractionOverlap))) 
-p3_label <- p3 + theme(legend.position = "none") #+ geom_label_repel(data=cellTypeLabels, aes(x=CellType, y=n.noPromoters.FractionOverlap, label=CellType))
+p3_label <- p3 #+ geom_label_repel(data=cellTypeLabels, aes(x=CellType, y=n.noPromoters.FractionOverlap, label=CellType))
 ```
 
 
 ```{r plottingFractionOverlap_all, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE, fig.width=6, fig.height=4}
 ibdFractionOverlap$CellType <- ordered(ibdFractionOverlap$CellType, levels=rev(ibdFractionOverlap[order(ibdFractionOverlap$n.FractionOverlap),"CellType"]))
-p4 <- ggplot(ibdFractionOverlap, aes(x=n.FractionOverlap, y=CellType, fill = CellType)) + xlab(paste0("Fraction Overlap\n( ", trait, " variants / all variants)")) + facet_wrap(~title2) #+ geom_label_repel(data=cellTypeLabels, aes(label=CellType))
-p4 <- p4 %>% formatFractionBarPlot() + scale_x_continuous(limits = c(0, max(ibdFractionOverlap$n.noPromoters.FractionOverlap)))
-p4_label <- p4 + theme(legend.position = "none")
+p4 <- ggplot(ibdFractionOverlap, aes(x=n.FractionOverlap, y=CellType, fill = CellType)) + xlab(paste0("Fraction Overlap\n( ", trait, " variants / all variants)")) + facet_wrap(~title2) + theme(legend.position="none") #+ geom_label_repel(data = head(ibdFractionOverlap[order(-ibdFractionOverlap$n.FractionOverlap),], 10), aes(label = CellType), color = "black") + theme(legend.position="none") 
+p4 <- p4 %>% formatFractionBarPlot() + scale_x_continuous(limits = c(0, max(ibdFractionOverlap$n.noPromoters.FractionOverlap))) 
+p4_label <- p4 
 ```
 
 ```{r plotIndividualGenePrecisionRecall, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}

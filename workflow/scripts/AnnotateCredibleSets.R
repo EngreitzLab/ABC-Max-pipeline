@@ -25,7 +25,7 @@ option.list <- list(
   make_option("--outbase", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_out/IBD/", help="Output file basename"),
   make_option("--outEnrichment", type="character", default="./Enrichment.CellType.vsScore.tsv", help="Output cell type enrichment table"),
   make_option("--outGenePredTable", type="character", default="./GenePredictions.allCredibleSets.tsv", help="Output gene prediction table filename"),
-
+  make_option("--outGenePredTableDedup", type="character", default="./GenePredictions.allCredibleSets.tsv", help="Output gene prediction table filename"),
   make_option("--hasCellType", type="logical", default=TRUE, help="Do predictions have an associated cellType column?"),
   make_option("--hasTargetGeneTSS", type="logical", default=TRUE, help="Do predictions have an associated targetGeneTSS column?"),
   # TODO: edit downstream steps so that these are only used for ABC predictions
@@ -153,15 +153,20 @@ if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
 # Overlapping variants with predictions
 # the required column names
 overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, isTargetGeneTSS=opt$hasTargetGeneTSS)
+write.table(overlap, file=paste0(opt$outbase, "data/overlap.full.tsv"))
 overlap <- filterVariantOverlap(overlap, opt$predScoreCol, opt$minPredScore, opt$minPredScorePromoters)
-
+write.table(overlap, file=paste0(opt$outbase, "data/overlap.tsv"))
 
 # Annotating overlaps
 all.flat <- annotateVariantOverlaps(overlap, variant.list, all.cs)
-if (opt$hasCellType) {
+if (opt$hasCellType){ 
   all.flat <- subset(all.flat, CellType %in% cell.type.list)  ## IMPORTANT CHANGE
 }
 filter.flat <- subset(all.flat, CredibleSet %in% filter.cs$CredibleSet)
+
+if (!(is.null(opt$variantScoreCol))){
+  filter.flat <- subset(filter.flat, opt$variantScoreCol>=opt$variantScoreThreshold)
+}
 
 # If a threshold is provided, getting annotations for significant variants
 sigScore.flat = NULL
@@ -302,6 +307,23 @@ if (!opt$isEnhancerBed){
 	  method.name=opt$methodName)
 
 	writeGenePrioritizationTable(gp.all, file=paste0(opt$outGenePredTable))
+	
+	# dedup variantGenePairs
+	all.flat.dedup <- dedupVariantGenePairs(all.flat)
+	gp.dedup <- getGenePrioritizationTable(
+	  all.flat.dedup,
+          all.cs,
+          genes,
+          genes.uniq,
+          enriched.cell.types,
+          cell.type.annot,
+          score.col=opt$predScoreCol,
+          score.min=opt$minPredScore,
+          var.score.col=opt$variantScoreCol,
+          var.score.min=opt$variantScoreThreshold,
+          max.distance=opt$genePredMaxDistance,
+          method.name=opt$methodName)	
+	writeGenePrioritizationTable(gp.dedup, file=paste0(opt$outGenePredTableDedup))
 }
 saveProgress()
 

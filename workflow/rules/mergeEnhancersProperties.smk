@@ -32,17 +32,13 @@ rule generateCountMetrics:
 		numGenes = os.path.join(config["outDir"], "{pred}/{pred}.metrics.numGenes.tsv"),
 		numEGCounts = os.path.join(config["outDir"], "{pred}/{pred}.metrics.numEGCounts.tsv"),
 		numBiosamplesCounts = os.path.join(config["outDir"], "{pred}/{pred}.metrics.numBiosamplesCounts.tsv"),
-		numBiosample = os.path.join(config["outDir"], "{pred}/{pred}.metrics.numBiosamples.tsv"),
-		totalUniquebp = os.path.join(config["outDir"], "{pred}/{pred}.metrics.uniquebp.tsv"),
-		outPredFile = os.path.join(config["outDir"], "{pred}/{pred}.mergedEnhancerRegions_numBiosamples.tsv.gz")
+		totalUniquebp = os.path.join(config["outDir"], "{pred}/{pred}.metrics.uniquebp.tsv")
 	run:
 		shell(
 			"""
 			python {params.metrics} \
 			--predFile {input.mergedPredFile} \
-			--outPredFile {output.outPredFile} \
 			--totalUniqueBp {output.totalUniquebp} \
-			--numBiosamples {output.numBiosample} \
 			--genes {params.genes} \
 			--numGenes {output.numGenes} \
 			--numBiosamplesCounts {output.numBiosamplesCounts} \

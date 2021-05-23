@@ -138,7 +138,10 @@ rule plotFractionOverlapPosteriorProb:
 			--datadir {params.dataDir} \
 			--traitTable {params.traitTable} \
 			--outdir {params.outDir} \
-			--codeDir {params.codeDir}	
+			--codeDir {params.codeDir} \
+			--outfile {output.tsv} \
+			--pdf {output.pdf} \
+			--outfile_noncoding {output.noncoding}	
 			""")
 		
 
@@ -238,7 +241,8 @@ rule getAggregateReport_input:
 		pred = "{pred}", 
 		outDir = os.path.join(config["outDir"], "{pred}/")
 	output:
-		outfile = os.path.join(config["outDir"], "{pred}/{pred}_aggregateTraitEnrichment.tsv")
+		outfile = os.path.join(config["outDir"], "{pred}/{pred}_aggregateTraitEnrichment.tsv"),
+		numCellTypes = os.path.join(config["outDir"],"{pred}/{pred}_numEnrichedCellTypesPerTrait.tsv")
 	run:
 		shell(
 			"""
@@ -246,7 +250,8 @@ rule getAggregateReport_input:
 			--enrichmentTables "{input.enrichmentFiles}" \
 			--outDir {params.outDir} \
 			--pred "{params.pred}" \
-			--outfile {output.outfile}
+			--outfile {output.outfile} \
+			--numCellTypes {output.numCellTypes}
 			""")	
 
 rule getAggregatePR_input:

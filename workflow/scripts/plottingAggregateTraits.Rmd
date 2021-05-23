@@ -33,7 +33,7 @@ library(htmltools)
 library(reactable)
 library(patchwork)
 # set global chunk options
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, warnings=FALSE)
 
 source(paste0(snakemake@params$codeDir, "JuicerUtilities.R"))
 source(paste0(snakemake@params$codeDir, "CredibleSetTools.R"))
@@ -85,6 +85,7 @@ diseases <- unique(ibdEnhancerList$Disease)
 formatEnrichmentBarPlot <- function(p) p + geom_boxplot(outlier.shape = NA) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=15), legend.position='none')
 #formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=10), legend.position='none') + geom_boxplot(outlier.shape = NA)
 
+ibdEnhancerList$Disease <- ordered(ibdEnhancerList$Disease, levels=unique(rev(ibdEnhancerList[order(ibdEnhancerList$enrichment.NoPromoters),"Disease"])))
 p1 <- ggplot(ibdEnhancerList, aes(x=Disease, y=enrichment.NoPromoters, fill=Disease)) + ylab(paste0("Enrichment\n( GWAS variants / all variants)")) + labs(title=paste0("Enhancers (excluding promoter regions) across traits")) + xlab("Trait") + ylim(0, max(ibdEnhancerList$enrichment.NoPromoters))
 p1 <- p1 %>% formatEnrichmentBarPlot()
 # figure caption
@@ -100,7 +101,7 @@ p2 <- p2 %>% formatEnrichmentBarPlot()
 ```{r plottingFractionOverlap, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
 formatEnrichmentBarPlot <- function(p) p + geom_boxplot(outlier.shape = NA) + scale_y_continuous(limits = c(0, 0.20)) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=diseases) + scale_color_hue(l=50, c=90) + theme(legend.position='none') 
 #formatEnrichmentBarPlot <- function(p) p + geom_boxplot(outlier.shape = NA) + geom_jitter(position=position_jitter(0.2), size=3) + scale_y_continuous(limits = c(0, 0.20)) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=diseases) + scale_color_hue(l=50, c=90) + theme(legend.position='none') 
-
+ibdEnhancerList$Disease <- ordered(ibdEnhancerList$Disease, levels=unique(rev(ibdEnhancerList[order(ibdEnhancerList$enrichment.NoPromoters),"Disease"])))
 p3 <- ggplot(ibdEnhancerList, aes(x=Disease, y=n.noPromoters.FractionOverlap, fill=Disease)) + ylab(paste0("Fraction Overlap\n( GWAS variants / all variants)")) + ggtitle(paste0("Enhancers (excluding promoter regions)")) 
 p3 <- p3 %>% formatEnrichmentBarPlot()
 #ggplotly(p3)
@@ -134,7 +135,7 @@ aggregateDF = aggregateDF[order(aggregateDF$enrichment.NoPromoters),]
 cdf = ggplot(aggregateDF, aes(x=enrichment.NoPromoters, col=Method)) + 
 	stat_ecdf(geom = "step") + ylab('Cumulative fraction') + 
 	xlab('Enrichment (GWAS variants/all common variants)') + 
-	theme() + 
+	theme_classic() + 
 	labs(title = "Density Plot for all enhancers (w/o promoter regions)")
 ```
 

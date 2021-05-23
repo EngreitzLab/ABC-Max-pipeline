@@ -16,13 +16,15 @@ main <- function() {
 			    make_option(c("--enrichmentTables"), type="character", default=NA, help="output filepath"),
 			    make_option(c("--outDir"), type="character", default=NA, help="enrichment table"),
 			    make_option(c("--pred"), type="character", default=NA, help= "number of base pairs per enhancer set"),
-			    make_option(c("--outfile"), type="character", default=NA, help="")
+			    make_option(c("--outfile"), type="character", default=NA, help="Aggregated Enrichment File"),
+			    make_option(c("--numCellTypes"), type="character", default=NA, help="File containing number of enriched CellTypes per trait")
 			    )
 	opt <- parse_args(OptionParser(option_list=option_list))
 	enrichmentTables = (opt$enrichmentTables) %>% strsplit(" ") %>% unlist()
 	pred = (opt$pred)
 	outDir = (opt$outDir)
 	outfile = (opt$outfile)
+	numCellTypes = (opt$numCellTypes)
 	cellEnrichment <- read.delim(enrichmentTables[1], sep = "\t", header=TRUE, check.names=F, stringsAsFactors=F, row.names=NULL)
 	cellEnrichment <- transform(cellEnrichment, n.FractionOverlap = n / total)
 	cellEnrichment <- transform(cellEnrichment, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
@@ -45,13 +47,13 @@ main <- function() {
 		}
 	}
 
-	write.table(cellEnrichment, file=paste0(outDir, pred, "_aggregateTraitEnrichment.tsv"), sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
+	write.table(cellEnrichment, file=outfile, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
 	
 	cellEnrichmentSignificant <- cellEnrichment %>% filter(p.NoPromoters < 0.05)
 	numCellTypesVal <- cellEnrichmentSignificant %>% group_by(Disease) %>% summarize(numCellTypes = length(unique(CellType)))
 	dz <- unique(cellEnrichmentSignificant$Disease)
 	numCellTypesDF <- data.frame(n=numCellTypesVal$numCellTypes, Disease=dz)
-	write.table(numCellTypesDF, file=outfile, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
+	write.table(numCellTypesDF, file=numCellTypes, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
 }
 
 main()
