@@ -26,23 +26,28 @@ loadVariantOverlap <- function(
   x <- read.delim(gzfile(overlap.file), check.names=F)
   if (!is.null(variant.names)) {
     variant.names <- variant.names[lapply(variant.names,length)>0]
-    tmp <- data.frame(variant=factor(as.character(as.matrix(variant.names)), levels=levels(x$QueryRegionName)))
+    tmp <- data.frame(variant=factor(as.character(as.matrix(variant.names)), levels=unique(x$QueryRegionName)))
+#    write.table(tmp, file="hello.tmp.tsv")
     tmp <- subset(tmp, !is.na(variant))
+#    write.table(tmp, file="x.tmp.tsv")
     x <- merge(x, tmp, by.x="QueryRegionName", by.y="variant")
+#    write.table(x, file="x.merged.tsv")
   }
-  
   ## Merge and add various other annotations
   if (overwriteTSS) {
     if ("TargetGeneTSS" %in% colnames(x)) x <- x %>% select(-TargetGeneTSS)
     x <- merge(x, with(genes.uniq, data.frame(TargetGene=name, TargetGeneTSS=tss)), by="TargetGene")
+#    write.table(x, file="x.tss.tsv")
   }
   
   if (isTargetGeneTSS) {
     x$isOwnTSS <- with(x, TargetGeneTSS >= start & TargetGeneTSS <= end)
+#    write.table(x, file="x.owntss.tsv")
   }
   codingSymbols <- subset(genes, grepl(";NM_", name))$symbol
   if (c("TargetGene") %in% colnames(x)){
   	x$TargetGeneIsCoding <- as.character(as.matrix(x$TargetGene)) %in% codingSymbols
+#  	write.table(x, file="x.targetgene.tsv")
   }
   return(x)
 }
@@ -75,7 +80,7 @@ filterVariantOverlap <- function(overlap, predCol, cutoff, tss.cutoff, ignore.li
 
 
 annotateVariantOverlaps <- function(overlap, variant.list, all.cs, var.cols=c("CredibleSet","Disease","PosteriorProb","Coding","SpliceSite","Promoter","LocusID")) {
-  cols.to.remove <- which(colnames(variant.list) %in% c("chr","position","start","end"))  
+  cols.to.remove <- which(colnames(variant.list) %in% c("chr","position","start","end")) 
   all.flat <- overlap
   all.flat <- merge(all.flat, variant.list[,-cols.to.remove], by.x="QueryRegionName", by.y="variant")
   return(all.flat)
@@ -111,11 +116,11 @@ countCellTypeOverlaps <- function(dat, cell.type.list, variant.names=NULL, cell.
   if (!is.null(variant.names)) {
     dat <- dat %>% filter(QueryRegionName %in% variant.names)
   }
-  
+  write.table(dat, file="dat.tsv")
   if (nrow(dat) == 0) {
-    result <- data.frame(CellType=cell.type.list, n=0)
+      print("nrow here")
+      result <- data.frame(CellType=cell.type.list, n=0)
   } else {
-    
     if (!is.null(cell.groups)) {
       ## Convert cell types to cell type groups
       df <- data.frame(CellType=cell.type.list, CellGroup=cell.groups)
@@ -123,18 +128,23 @@ countCellTypeOverlaps <- function(dat, cell.type.list, variant.names=NULL, cell.
       dat$CellType <- dat$CellGroup
       cell.type.list <- unique(cell.groups)
     }
-    
-    dat$CellType <- refactor(dat$CellType, cell.type.list)
-    
+    #dat$CellType <- refactor(dat$CellType, cell.type.list)    
+    write.table(dat, file="dat.celltype.tsv")
     if (!weightByPIP) {
       dat <- unique(dat[,c("QueryRegionName","CellType")])
       result <- dat %>% group_by(CellType) %>% tally()
+      print("HERE")
+      print(result)
     } else {
       dat <- unique(dat[,c("QueryRegionName","CellType","PosteriorProb")])
       result <- dat %>% group_by(CellType) %>% summarise(n=sum(PosteriorProb))
+      print("Here result")
+      print(result)
     }
     result <- merge(data.frame(CellType=cell.type.list), result, all.x=T)
+    write.table(result, file="result.tsv")
     result$n[is.na(result$n)] <- 0
+    print(result)
   }
   return(result)
 }
@@ -241,6 +251,28 @@ computeCellTypeEnrichment <- function(variants.by.cells, variant.list, cell.type
   return(hi.count)
 }
 
+makeUKBiobankUniqueSet <- function(Disease, CredibleSet) paste0(Disease, "-", CredibleSet)
+
+dedupVariantGenePairs <- function(gp) {
+  ## Dedup variant-gene pairs
+  ## Filter for PosteriorProb >- 0.05
+  gp <- subset(gp, PosteriorProb >= 0.05)
+  gp$CredibleSetUnique <- makeUKBiobankUniqueSet(gp$Disease, gp$CredibleSet)
+  csToRemove <- c()
+  filtered <- gp
+  for (i in with(filtered, which(duplicated(paste0(QueryRegionName, TargetGene))))) {
+    ## Keep the one with the highest PosteriorProbability
+    rows <- subset(filtered, QueryRegionName == QueryRegionName[i] & TargetGene == TargetGene[i])
+    if (nrow(rows) > 0) {
+      to.keep <- subset(rows, PosteriorProb == max(PosteriorProb))$CredibleSetUnique[1]
+      to.remove <- subset(rows, CredibleSetUnique != to.keep)$CredibleSetUnique
+      csToRemove <- c(csToRemove, to.remove)
+    }
+  }
+  filtered <- subset(filtered, !(CredibleSetUnique %in% csToRemove))
+  gp.filtered <- subset(gp, CredibleSetUnique %in% unique(filtered$CredibleSetUnique))
+  return(gp.filtered)
+}
 
 ####################################################################################
 ## Gene Prioritization Table
@@ -262,7 +294,7 @@ getGenePrioritizationTable <- function(
   write.table(all.cs$CredibleSet, file="cs.CredibleSet.tsv") 
   cs.tables <- list()
   for (cs.name in all.cs$CredibleSet) {
-    cs.tables[[cs.name]] <- getGenePrioritizationTableForCredibleSet(
+    value <- getGenePrioritizationTableForCredibleSet(
         cs.name, 
         all.clean, 
         all.cs,
@@ -276,6 +308,9 @@ getGenePrioritizationTable <- function(
         var.score.min,
         max.distance,
         method.name)
+    if (!is.null(value)){
+	cs.tables[[cs.name]] = value
+    }
   }
   print(length(cs.tables))
   result <- do.call(rbind, cs.tables) 
@@ -328,6 +363,7 @@ getGenePrioritizationTableForCredibleSet <- function(
 
   curr.cs <- subset(all.cs, CredibleSet == cs.name)
   stopifnot(nrow(curr.cs) == 1)
+  
 
   cs.genes <- getGenesNearCredibleSet(
     genes.uniq, 
@@ -343,9 +379,7 @@ getGenePrioritizationTableForCredibleSet <- function(
     max.distance)
  
   stopifnot(length(unique(all.cs$Disease)) == 1)
-  write.table(cs.genes, file="cs.genes.tsv")
   gp <- subset(genes.uniq, name %in% cs.genes)
-  write.table(gp, file="gp.csv")
   gp <- gp %>% transmute(
     trait=unique(all.cs$Disease),
     CredibleSet=cs.name,
@@ -361,17 +395,11 @@ getGenePrioritizationTableForCredibleSet <- function(
     DistanceToTSSRank=rank(DistanceToTSS, ties.method="min"), 
     Distance=distance(IRanges(curr.cs$BestSNPPos,curr.cs$BestSNPPos),IRanges(start,end-1)),
     DistanceRank=rank(Distance, ties.method="min"))
-  write.table(gp, file="gp.new.csv")
-  write.table(all.clean, file="all.clean.tsv")
   curr.pred <- subset(all.clean, CredibleSet == cs.name)
-  write.table(curr.pred, file="curr.pred.credibleset.tsv")
   curr.pred <- subset(curr.pred, CellType %in% cell.types)
-  write.table(curr.pred, file="curr.pred.celltypes.tsv")
   curr.pred <- subset(curr.pred, TargetGene %in% genes.uniq$name)
-  write.table(curr.pred, file="curr.pred.targetgene.tsv")
   if (!is.null(score.col) & nrow(curr.pred) > 0) curr.pred <- subset(curr.pred, get(score.col) >= score.min)
   if (!is.null(var.score.col) & nrow(curr.pred) > 0) curr.pred <- subset(curr.pred, get(var.score.col) >= var.score.min)
-  print(nrow(curr.pred))
   if (nrow(curr.pred) > 0) {
     pred.scores <- do.call(rbind, 
       by(curr.pred, curr.pred$TargetGene, function(x) {
@@ -386,19 +414,22 @@ getGenePrioritizationTableForCredibleSet <- function(
     gp.scores[[paste0("GeneRank.",method.name)]] <- rank(-gp.scores$GeneScore, ties.method="min")
     gp.scores[[paste0("GenePrediction.",method.name)]] <- !is.na(gp.scores[,paste0("GeneScore.",method.name)])
     gp.scores[[paste0("GenePredictionMax.",method.name)]] <- !is.na(gp.scores[,paste0("GeneScore.",method.name)]) & (gp.scores[,paste0("GeneRank.",method.name)] == 1 | is.na(gp.scores[,paste0("GeneScore.",method.name)]))
-
+    gp.scores <- gp.scores %>% arrange(TargetGene.TSS)
   } else {
-    print("HERE")
-    print(nrow(curr.pred))
-    gp.scores <- gp
-    gp.scores[[paste0("GeneScore.",method.name)]] <- NA
-    gp.scores[[paste0("CellTypes.",method.name)]] <- NA
-    gp.scores[[paste0("Variants.",method.name)]] <- NA
-    gp.scores[[paste0("GeneRank.",method.name)]] <- NA
-    gp.scores[[paste0("GenePrediction.",method.name)]] <- FALSE
-    gp.scores[[paste0("GenePredictionMax.",method.name)]] <- FALSE
+    if (dim(gp)[1] == 0) {
+	gp.scores <- NULL
+    }
+    else {
+   	 gp.scores <- gp
+   	 gp.scores[[paste0("GeneScore.",method.name)]] <- NA
+   	 gp.scores[[paste0("CellTypes.",method.name)]] <- NA
+   	 gp.scores[[paste0("Variants.",method.name)]] <- NA
+   	 gp.scores[[paste0("GeneRank.",method.name)]] <- NA
+   	 gp.scores[[paste0("GenePrediction.",method.name)]] <- FALSE
+   	 gp.scores[[paste0("GenePredictionMax.",method.name)]] <- FALSE
+    	 gp.scores <- gp.scores %>% arrange(TargetGene.TSS)
+    }
   }
-  gp.scores <- gp.scores %>% arrange(TargetGene.TSS)
   return(gp.scores)
 }
 
@@ -414,19 +445,14 @@ getGenesNearCredibleSet <- function(
   cs.start, 
   cs.end, 
   max.distance) {
-  write.table(genes.uniq, file="genes.uniq.tsv") 
   nearby.genes <- genes.uniq %>% filter(chr == cs.chr & tss >= cs.start-max.distance & tss <= cs.end+max.distance) %>% pull(name) %>% as.matrix() %>% as.character()
-  write.table(nearby.genes, file="nearby.genes.tsv")
   abc.genes <- all.flat %>% filter(CredibleSet == cs.name)
-  write.table(abc.genes, file="abc.genes.tsv")
   if (!is.null(score.col) & nrow(abc.genes) > 0) 
     abc.genes <- subset(abc.genes, get(score.col) >= score.min)
   if (!is.null(var.score.col) & nrow(abc.genes) > 0) 
     abc.genes <- subset(abc.genes, get(var.score.col) >= var.score.min)
   abc.genes <- abc.genes$TargetGene %>% as.matrix() %>% as.character()
-  write.table(abc.genes, file="abc.genes.new.tsv")
   cs.genes <- unique(c(nearby.genes, abc.genes))
-  write.table(cs.genes, file="cs.genes.nearby.tsv")
   return(cs.genes)
 }
 
@@ -545,6 +571,12 @@ addGeneScoresToGP <- function(gp, gene.scores) {
 }
 checkInteger <- function(n) n == round(n)
 
+selectUKBTraits <- function(trait_params) {
+  trait_params$UseForGeneTraining <- with(trait_params, 
+	ABCGeneTrainingSet &
+	nCsABCTraining >= 10)
+  return(trait_params)
+}
 
 getPrecisionRecall <- function(pred, labels, weights=NULL, ...) {
   ## Used currently by CollateABCTrainingData.R
@@ -584,7 +616,153 @@ getPrecisionRecall <- function(pred, labels, weights=NULL, ...) {
   return(result)
 }
 
+###### OverlapFractionVariants with increasing Posterior Probability Tools ######
 
+#readGenePredictions <- function(trait, analysisDir, geneFeatures, cellTypes, pops=NULL) {
+#  file <- paste0(analysisDir, "/GenePredictions.all.tsv")
+#  if (!file.exists(file)) {
+#    print(paste0("Could not find gene predictions file for ", trait))
+#    return(NULL)
+#  }
+#  gp <- read.delim(file, check.names=F, stringsAsFactors=F)
+#  gp$CellTypes <- getPredictedCellTypes(gp, cellTypes)
+#
+#  cols <- unique(c(required.cols, colnames(gp)[grepl("GeneList",colnames(gp))])) #, cellTypes))  ## Cell types are only included in each matrix if there is at least one nonzero value, so would need to reformat to accommodate
+#
+##  if (length(setdiff(cols, colnames(gp)))>0) {
+##    print(paste0("Skipping ", trait, " because it missing cell type columns."))
+##    print(head(setdiff(cols, colnames(gp))))
+##    return(NULL)
+##  }
+#
+#  gp <- gp[,cols]
+#
+#  gp.pp10 <- read.delim(paste0(analysisDir, "/GenePredictions.tsv"), check.names=F)
+#  pp10.cs <- unique(gp.pp10$CredibleSet)
+#  gp$pp10 <- with(gp, CredibleSet %in% gp.pp10$CredibleSet)
+#  
+#  cs.stats <- getCredibleSetStats(gp)
+#  gp <- merge(gp, cs.stats, by="CredibleSet")
+#  gp <- merge(gp, geneFeatures, by="TargetGene", all.x=TRUE)
+#  gp <- addGeneCS(gp)
+#  gp <- filterByDistance(gp)
+#
+#  if (!is.null(pops)) gp <- addPops(gp, pops)
+#
+#  return(gp)  
+#}
 
+readAllVariants <- function(params, dir, posteriorProb=0.1) {
+  result <- list()
+  for (disease in params$entry) {
+    varList <- subset(params, entry == disease)$varList
+    result[[disease]] <- read.delim(paste0(dir, varList), header=T, check.names=F, stringsAsFactors=F)
+  }
+  return(result)
+}
+
+readAllVariantPredictions <- function(params, cellTypeEnrich, genePredictions, posteriorProb=0.1) {
+	enrich <- cellTypeEnrich[,c("Disease","CellType","LDSC.Significant","FM.vsGenomeSignificant")]
+	result <- list()
+	# select which traits to use
+	
+	for (dz in params$Disease) {
+	    	dir <- subset(params, Disease == dz)$Overlap
+		curr <- subset(read.delim(paste0(dir, "/data/all.flat.tsv"), check.names=F, stringsAsFactors=F), PosteriorProb >= posteriorProb)
+		
+		curr <- merge(curr, subset(enrich, Disease == dz), all.x=TRUE)
+		curr <- merge(curr, genePredictions[[dz]][,c("Disease","CredibleSet","TargetGene","ConnectionStrengthRank.Binary.AnyDisease_FMOverlap_Enriched","DistanceRank","POPS.Rank")], all.x=TRUE)
+		result[[dz]] <- curr
+	    }
+	sharedCols <- colnames(result[[1]]); for (i in 2:length(result)) sharedCols <- intersect(sharedCols, colnames(result[[i]]))
+	result <- do.call(rbind, lapply(result, "[", sharedCols))
+	return(result)
+}
+
+getAllVariantEnrichmentHelper <- function(posteriorProb, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, PropSNPs=0.0756841077, dz=NULL, noncodingOnly=FALSE, CellTypes=NULL, finalOnly=FALSE) {
+	if (!finalOnly) {
+		if (!is.null(CellTypes)) {
+			flat.pp <- merge(all.flat.full, 
+					data.frame(CellType=factor(as.character(as.matrix(CellTypes)),
+					levels=levels(all.flat.full$CellType)))) %>% 
+			filter(PosteriorProb >= posteriorProb & !grepl("IBD\\+",Disease) & (!Coding)) #| !noncodingOnly))
+		} else {
+			test <- all.flat.v %>% filter(PosteriorProb >= posteriorProb)
+			test2 <- test %>% filter(!grepl("IBD\\+",Disease))
+#			final <- test2 %>% filter(Coding==False)			
+#			flat.pp <- all.flat.v %>% filter(PosteriorProb >= posteriorProb & !grepl("IBD\\+",Disease) & (!Coding )) #| !noncodingOnly))
+			flat.pp <- test2
+		}
+	} else {
+		if (!is.null(CellTypes)) {
+			flat.pp <- merge(final.flat.full, 
+					 data.frame(CellType=factor(as.character(as.matrix(CellTypes)), levels=levels(all.flat.full$CellType)))) %>% 
+		  filter(PosteriorProb >= posteriorProb & !grepl("IBD\\+",Disease) & (!Coding | !noncodingOnly))
+		} else {
+			flat.pp <- final.flat.v %>% filter(PosteriorProb >= posteriorProb & !grepl("IBD\\+",Disease) & (!Coding | !noncodingOnly))
+		}
+	}
+	
+	if (!is.null(dz)) {
+		flat.pp <- flat.pp %>% filter(Disease %in% dz)
+		vlist <- vlist[dz]
+	}
+	print("Finished")
+	# need to test this portion 
+	res <- data.frame(
+	      		  nOverlaps=flat.pp %>% select(QueryRegionName,Disease) %>% unique() %>% nrow(),
+	      		  nTotal=sum(unlist(lapply(vlist, function(v) with(v, sum(PosteriorProb >= posteriorProb & (!Coding | !noncodingOnly)))))),
+	      		  cs.nOverlaps=flat.pp %>% select(CredibleSet,Disease) %>% unique() %>% nrow(),
+	      		  cs.nTotal=sum(unlist(lapply(vlist, function(v) length(unique(subset(v, PosteriorProb >= posteriorProb & (!Coding | !noncodingOnly))$CredibleSet))))),
+	      		  PosteriorProb=posteriorProb
+	      		  )
+	res$fraction <- with(res, nOverlaps/nTotal)
+	res$enrichment <- with(res, fraction/PropSNPs)
+	res$cs.fraction <- with(res, cs.nOverlaps/cs.nTotal)
+	res$Disease <- if (!is.null(dz)) paste0(dz,collapse=',') else "All"
+	return(res)
+}
+
+getAllVariantEnrichment <- function(ppBreaks, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, PropSNPs=0.0756841077, dz=NULL, noncodingOnly=FALSE, CellTypes=NULL, finalOnly=FALSE) {
+	do.call(rbind, lapply(ppBreaks, getAllVariantEnrichmentHelper, all.flat.full=all.flat.full, all.flat.v=all.flat.v, final.flat.v=final.flat.v, vlist=all.v, PropSNPs=PropSNPs, dz=dz, noncodingOnly=noncodingOnly, CellTypes=CellTypes, finalOnly=finalOnly))
+}
+
+getPrecisionBaseline <- function(gp) mean(1 / unique(gp[,c("CredibleSet","CredibleSet.nNearbyGenes")])$TotalNearbyGenes)
+
+getPRTable <- function(gp, pred.cols) {
+
+	    pr <- do.call(rbind, c(
+				       with(gp, list(
+						           getPrecisionRecall(DistanceRank == 1, knownGene, Method="Closest Gene"),
+							         getPrecisionRecall(DistanceToTSSRank == 1, knownGene, Method="Closest TSS"))),
+				       lapply(pred.cols, function(col) getPrecisionRecall(gp[,col], gp$knownGene, Method=gsub("^Gene","",col)))
+				         ))
+  return(pr)
+}
+
+getPRPlot <- function(pr, baseline=NULL, xlab="Recall") {
+	  pr <- pr %>% group_by(Method) %>% mutate(n=n())
+  pr.points <- pr %>% filter(n==1)
+    pr.lines <- pr %>% filter(n>1)
+    p <- ggplot(pr.points, aes(x=Recall, y=Precision, color=Method))
+      if (!is.null(baseline)) p <- p + geom_hline(yintercept=baseline, color='gray', linetype='dashed')
+      p <- p + geom_point(size=3)
+        p <- p + geom_line(data=pr.lines)
+        p <- p + mytheme + coord_fixed() + xlim(0,1) + ylim(0,1) + xlab(xlab) + ylab("Precision")
+	  return(p)
+}
+
+doOneKnownGeneList <- function(gene.list.name, gp, predictors, trait_params, knownGenes, knownGeneMaxDistance=1000000, maxKnownGenes=1) {
+	  # filter for only diseases that exists in trait_params 
+	  #gp <- subset(gp, (Disease %in% unique(trait_params$Disease)))
+	  ## Current logic: Filter the gene prediction table to those credible sets with exactly one known gene nearby
+	  gp.plot <- gp %>% filter(DistanceToTSS <= knownGeneMaxDistance) %>%
+		  mutate(knownGene=TargetGene %in% knownGenes[[gene.list.name]]) %>%
+		  group_by(CredibleSet) %>% mutate(nKnownGenes=sum(knownGene)) %>% ungroup() %>%
+		  filter(nKnownGenes > 0 & nKnownGenes <= maxKnownGenes & CredibleSet.NoncodingWithSigVariant) %>% as.data.frame()
+	  #pr <- getPRTable(gp.plot, predictors)
+	  #p <- getPRPlot(pr, baseline=getPrecisionBaseline(gp), xlab=paste0("Recall (n=",sum(gp.plot$knownGene),")"))
+	  print(gp.plot)
+}
 
 

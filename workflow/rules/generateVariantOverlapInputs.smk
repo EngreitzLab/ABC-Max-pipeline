@@ -1,7 +1,25 @@
+rule filterBackgroundDistalNonCoding:
+	input:
+		partition = config["partition"],
+		allVariants = config["bgVariants"]
+	output:
+		partitionDistalNoncoding = os.path.join(config["outDir"], "Parititon.distalNoncoding.bed"),
+		commonVarDistalNoncoding = os.path.join(config["outDir"], "distalNoncoding.bg.SNPs.bed.gz")
+	run:
+		shell(
+			"""
+			set +o pipefail;
+			
+			# filter partition to distal noncoding 
+			awk '$4=="ABC" || $4=="AllPeaks" || $4=="Other" || $4=="OtherIntron" || $4=="TSS-500bp"' {input.partition} | sort -k1,1 -k2,2n > {output.partitionDistalNoncoding}
+			# filter common variants to distal noncoding
+		 	cat {input.allVariants} | bedtools intersect -wa -sorted -a stdin -b {output.partitionDistalNoncoding} | sort -k1,1 -k2,2n | gzip > {output.commonVarDistalNoncoding}	
+			""")
+
 rule computeBackgroundOverlap:
 	input:
 		predFile = lambda wildcard: config["predDir"]+str(preds_config_file.loc[wildcard.pred, "predFile"]),
-		allVariants = config["bgVariants"],
+		allVariants = os.path.join(config["outDir"], "distalNoncoding.bg.SNPs.bed.gz"),
 		chrSizes = config["chrSizes"],
 		CDS = config["CDS"]
 	params:
@@ -47,7 +65,7 @@ rule computeBackgroundOverlap:
 rule computeBackgroundOverlap_noPromoters:
 	input:
 		overallOverlap = os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"),
-		bgVars = config["bgVariants"],
+		bgVars = os.path.join(config["outDir"], "distalNoncoding.bg.SNPs.bed.gz"),
 		CDS = config["CDS"],
 		geneTSS = expand("{outdir}{{pred}}/geneTSS.500bp.bed", outdir=config["outDir"])	
 	output:
@@ -59,31 +77,34 @@ rule computeBackgroundOverlap_noPromoters:
 		shell(
 			"""
 			set +o pipefail;
-
+			# Intersecting a background list of variants with predicted enhancers (excluding promoter regions)
+			# to compute background rate at which common variants overlap enhancers	
 			zcat {input.overallOverlap} | head -1 | gzip -c > {output.overallOverlap_noPromoter}
 			zcat {input.overallOverlap} | sed 1d > {input.overallOverlap}.tmp 
 			bedtools intersect -v -a {input.overallOverlap}.tmp -b {input.geneTSS} | gzip -c >> {output.overallOverlap_noPromoter} 
 			
 
-			# Getting the cell type column and counting
+			# Getting the cellType column and counting the number of background overlaps 
+			# This is used as an input file in AnnotateCredibleSets.R where we calculate enrichment 
+			# of GWAS variants across different cellTypes
 			zcat {output.overallOverlap_noPromoter} | cut -f 7 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.overallOverlapCounts_noPromoter};
 			
-                        # Compute fraction of noncoding variants overlapping predictions in any cell type
+                        # Compute fraction of noncoding variants overlapping predictions in each respective cellType
 			zcat {output.overallOverlap_noPromoter} | bedtools intersect -v -a stdin -b {input.CDS} | cut -f 1-3,7 | sort | uniq | cut -f 4 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.noncodingOverlap_noPromoter}
-			
+			# Remove tmp file
 			rm {input.overallOverlap}.tmp
 
-			# Remove promoter variants from bgVars 
+			# Remove promoter variants from bgVars
 			zcat {input.bgVars} | bedtools intersect -v -a stdin -b {input.geneTSS} | gzip > {output.bgVars_noPromoter}
 			""")
 
 rule createVarFiles:
 	input:
-		varList = lambda wildcard: config["traitDir"]+trait_config_file.loc[wildcard.trait, "varList"]
+		varList = lambda wildcard: config["traitDir"]+trait_config_file.loc[wildcard.trait, "varList"],
+		partitionDistalNoncoding = os.path.join(config["outDir"], "Parititon.distalNoncoding.bed")
 	output:
 		varBed = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.bed"),
 		varBedgraph = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.bedgraph"),
-		sigvarList = os.path.join(config["outDir"],"{pred}/{trait}/{trait}.sig.varList.tsv"),
 	log: os.path.join(config["logDir"], "{trait}.{pred}.createbed.log")
 	params:
 		varFilterCol = lambda wildcard: trait_config_file.loc[wildcard.trait, "varFilterCol"],
@@ -92,41 +113,15 @@ rule createVarFiles:
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/")
 	message: "Creating variant BED files"
 	run:
-		if {params.varFilterCol} is not None:
-			shell(
-				"""
-				# make output dir 
-				if [ ! -d {params.outDir} ]
-                       		then
-                                	mkdir {params.outDir}
-                        	fi
-				# Subsetting the variant list based on significance
-				# Finding the score colum
-				#scoreCol=$(awk -v RS='\\t' '/{params.varFilterCol}/{{print NR; exit}}' {input.varList});
-
-				# Filtering to retain variants exceeding the threshold
-				#awk '{{ if ($($scoreCol) >= {params.varFilterThreshold}) {{ print }} }}' {input.varList}  > {output.sigvarList};
-				cat {input.varList} | csvtk -t filter -f "{params.varFilterCol}>={params.varFilterThreshold}" > {output.sigvarList};
-	
-				# Creating the bed file
-				# Finding and cutting chr, position, and variant columns
-				# TODO: do not require start and stop, only position?
-				cat {output.sigvarList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 | sed -e 's/8.1e+07/81000000/g'> {output.varBed};
-
-				# Ensure that variants are sorted for bedtools -sorted overlap algorithm
-				cat {output.varBed} | bedtools sort -i stdin -faidx {params.chrSizes} | uniq > {output.varBedgraph};
-				""")
-		else:
-			shell(
-				"""
-				#fi
-				# Creating the bed file for all variants
-				# Finding and cutting chr, pos, and var columns
-				cat {input.varList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 > {output.varBed};
-
-				# Ensure that variants are sorted for bedtools -sorted overlap algorithm
-				cat {output.varBed} | bedtools sort -i stdin -faidx {params.chrSizes} | uniq > {output.varBedgraph};
-				""")
+		shell(
+			"""
+			set +o pipefail;
+			# Creating the bed file for all variants
+			# Finding and cutting chr, pos, and var columns
+			cat {input.varList} | csvtk cut -t -f chr,position,variant | sed '1d' | awk -F "\\t" "\$1 = \$1 FS \$2-1 FS \$2 FS \$3 FS" | cut -f1-4 | sort -k1,1 -k2,2n | bedtools intersect -wa -sorted -a stdin -b {input.partitionDistalNoncoding} > {output.varBed};
+			# Ensure that variants are sorted for bedtools -sorted overlap algorithm
+			cat {output.varBed} | bedtools sort -i stdin -faidx {params.chrSizes} | uniq > {output.varBedgraph};
+			""")
 	
 
 rule overlapVariants:
@@ -164,8 +159,10 @@ rule overlapVariants_noPromoter:
 		shell(
 			"""
 			set +o pipefail;
-
+			# Creating an empty file with the final columns
 			zcat {input.overlap} | head -1 | gzip > {output.overlap_noPromoter}
+			
+			# Removing promoter regions from disease variants
 			zcat {input.overlap} | sed 1d | bedtools intersect -g {params.chrSizes} -b {input.geneTSS} -a stdin | gzip >> {output.overlap_noPromoter}
 		 					
 			""")
@@ -175,7 +172,8 @@ rule generateAnnotateVariantInputs:
 		bgVars = config["bgVariants"],
                 bgVars_noPromoter = expand("{outdir}{{pred}}/all.bg.SNPs.noPromoter.bed.gz", outdir=config["outDir"]),
                 bgOverlap = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.tsv.gz", outdir=config["outDir"]),
-                bgOverlap_noPromoter = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.noPromoter.tsv.gz", outdir=config["outDir"])
+                bgOverlap_noPromoter = expand("{outdir}{{pred}}/{{pred}}.OverlapAllSNPs.noPromoter.tsv.gz", outdir=config["outDir"]),
+		partitionDistalNoncoding = os.path.join(config["outDir"], "Parititon.distalNoncoding.bed")
 	output: 
 		bgVars_count = expand("{outdir}{{pred}}/bgVariants.count.tsv", outdir=config["outDir"]),
 		bgVars_noPromoter_count = expand("{outdir}{{pred}}/bgVariants.count.noPromoter.tsv", outdir=config["outDir"]),
@@ -185,8 +183,13 @@ rule generateAnnotateVariantInputs:
 		shell(
 			"""
 			set +o pipefail;
+			# Count the number of background variants and save into an output file
 			zcat {input.bgVars} | cut -f4 | sort -u | wc -l > {output.bgVars_count}
+			# Count the number of background variants (excluding variants that overlap promoters and save into 
+			# an output file 
 			zcat {input.bgVars_noPromoter} | cut -f4 | sort -u | wc -l > {output.bgVars_noPromoter_count}
+			# Count the number of background variants that overlap predicted enhancers and save into an output file
 			zcat {input.bgOverlap} | cut -f4,8 | sort -u | awk '{{count[$2]++}}END{{for(j in count) print j"\t"count[j]}}' | sort -u | cut -f1,2 > {output.bgOverlap_count}
+			# Count the number of background variants that overlap predicted enhancers (excluding promoter regions) and save into an output file
 			zcat {input.bgOverlap_noPromoter} | cut -f4,8 | sort -u | awk '{{count[$2]++}}END{{for(j in count) print j"\t"count[j]}}' | sort -u | cut -f1,2> {output.bgOverlap_noPromoter_count}
 			""")

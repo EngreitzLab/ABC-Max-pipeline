@@ -4,7 +4,7 @@ author: "Kristy Mualim"
 date: "04/15/2021"
 output:
     html_document:
-        toc: true 
+       toc: true
 ---
 
 ```{css echo=FALSE}
@@ -28,9 +28,14 @@ library(cowplot)
 library(gtools)
 library(viridis)
 library(RColorBrewer)
-
+library(DT)
+library(htmltools)
+library(reactable)
+library(patchwork)
+library(ggrepel)
+library(ggpubr)
 # set global chunk options
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
 
 #source(file.path(snakemake@params$codeDir, "PlotCellTypeEnrichment.R"))
 #source(file.path(snakemake@params$codeDir, "PlotEnrichmentAggregate.R"))
@@ -45,227 +50,364 @@ all_predictors = strsplit(snakemake@params$predictors, " ") %>% unlist()
 enrichmentTables = strsplit(snakemake@input$enrichmentFiles, " ") %>% unlist()
 cellCategories <- read.delim(snakemake@params$cellTypeTable, header=T, sep="\t")
 cellEnrichment <- read.delim(snakemake@input$cellTypeEnrichments, sep = "\t", header=TRUE, check.names=F, stringsAsFactors=F, row.names=NULL)
-#gp <- read.delim(snakemake@input$genePredTable, check.names=F, stringsAsFactors=F, comment.char='#')
-knownGenes <- read.delim(snakemake@input$knownGenes, check.names=F, stringsAsFactors=F, comment.char='#')
+knownGenes <- read.delim(snakemake@input$knownGenes, header=TRUE, check.names=F, stringsAsFactors=F, comment.char='#')
+trait <- snakemake@wildcards$trait
+pred <- snakemake@wildcards$pred
 ```
-
-This report shows summary statistics produced by the disease variant validation pipeline for predictions made by 
-**`r snakemake@wildcards$pred`**.
-The following report is done for **`r snakemake@wildcards$trait`** traits.
-
-# Plotting enrichment of `r snakemake@wildcards$trait` variants
-These barplots calculates the enrichment for fine-mapped `r snakemake@wildcards$trait` variants (PIP >= 10%) in `r snakemake@wildcards$pred` enhancers and enhancers without promoter regions (promoter regions as defined by RefSeq) across all biosamples.
-<br> We also calculate the fraction of `r snakemake@wildcards$trait` variants (PIP >= 10%) that overlap `r snakemake@wildcards$pred` enhancers and enhancers without promoter regions (promoter regions as defined by RefSeq) across all biosamples.
-
-```{r plottingEnrichmentCode, echo=FALSE, warnings=FALSE}
+```{r plottingEnrichmentCode, echo=FALSE, error=FALSE, message=FALSE,  warnings=FALSE}
+############ DESCRIPTION ###########
+# This function takes in *.Enrichment.vsScore.tsv files and outputs enrichment bar plots across different cell categories as defined by catOrder 
 
 # load in inputs
-catOrder <- sort(unique(cellCategories$Categorical.IBDTissueAnnotations2))
-n <- length(unique(catOrder))
+#catOrder <- c("myeloid","Bcell","Tcell","hematopoietic","fibroblast","epithelial","other")
+#n <- length(unique(catOrder))
 color = grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-catColors <- c("green","orange","blue","purple","pink","brown","gray", sample(color, n-7))
-names(catColors) <- catOrder
-
+#catColors <- c("green","orange","blue","purple","pink","brown","gray", sample(color, n-7))
+#names(catColors) <- catOrder
+#
+## Calculate Number of variants that overlpa 
 cellEnrichment <- transform(cellEnrichment, n.FractionOverlap = n / total)
 cellEnrichment <- transform(cellEnrichment, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
-# Set theme of plots
-mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1), axis.text = element_text(size = 13), axis.title = element_text(size = 15))
+
+## Set theme of plots
+mytheme <- theme_classic() + theme(axis.text.y = element_text(angle = 45, vjust = 1, hjust = 1))
 
 enrichPlot <- merge(cellEnrichment, cellCategories[,c("CellType","Categorical.IBDTissueAnnotations2")], by="CellType")
 ibdEnhancerList <- merge(cellCategories, enrichPlot[, c("CellType", "enrichment", "enrichment.NoPromoters", "n.noPromoters.FractionOverlap", "n.FractionOverlap")], by="CellType")
-#ibdEnhancerList <- merge(cellCategories, subset(enrichPlot, Disease == as.character(snakemake@wildcards$trait))[,c("CellType", "enrichment", "enrichment.NoPromoters", "n.noPromoters.FractionOverlap", "n.FractionOverlap")], by="CellType")
-ibdEnhancerList$CellCat <- ordered(ibdEnhancerList$Categorical.IBDTissueAnnotations2, levels=catOrder)
-ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(cellCategories[order(cellCategories$Categorical.IBDTissueAnnotations2),"CellType"]))
+#ibdEnhancerList$CellCat <- ordered(ibdEnhancerList$Categorical.IBDTissueAnnotations2, levels=catOrder)
 
-formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=catColors) + scale_color_hue(l=50, c=90)
+formatEnrichmentPointPlot <- function(p) p + xlim(0, 22) + mytheme + geom_vline(xintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=12), axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
 
-p1 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment.NoPromoters, color=CellCat)) + ggtitle("Enrichment of Enhancers \n (w/o promoters) that overlap variants") + ylab(paste0("Enrichment\n( ", snakemake@wildcards$trait, " variants / all variants)"))
-p2 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment, color=CellCat)) + ggtitle("Enrichment of Enhancers \n that overlap variants") + ylab(paste0("Enrichment\n( ", snakemake@wildcards$trait, " variants / all variants)"))
-p1 <- p1 %>% formatEnrichmentBarPlot()
-p2 <- p2 %>% formatEnrichmentBarPlot()
-ggplotly(p1)
-ggplotly(p2)
+
+ibdEnhancerList$title1 <- "Enhancers (excluding promoter regions)"
+ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=ibdEnhancerList[order(ibdEnhancerList$enrichment.NoPromoters),"CellType"])
+top10 <- head(ibdEnhancerList[order(-ibdEnhancerList$enrichment.NoPromoters),"CellType"], 10)
+p1 <- ggplot(ibdEnhancerList, aes(x=enrichment.NoPromoters, y=CellType)) + geom_point(size=1, alpha=0.3) + facet_wrap(~title1) + xlab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + geom_point(data=subset(ibdEnhancerList, CellType %in% top10), aes(colour=CellType), size=4) + scale_color_discrete(name="CellType") + theme(legend.position="none") 
+p1 <- p1 %>% formatEnrichmentPointPlot()
+p1_label <- p1 
+
+p1_plotly <- ggplot(ibdEnhancerList, aes(x=enrichment.NoPromoters, y=CellType, fill=CellType)) + facet_wrap(~title1) + ylab("CellTypes") + xlab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + theme(legend.position="none") + geom_point()
+p1_plotly <- p1_plotly %>% formatEnrichmentPointPlot() + theme(legend.position="none")
+
 ```
 
-# Plotting fraction overlap of variants
-We plot the fraction overlap of `r snakemake@wildcards$trait` variants (PIP >= 10%) that overlap `r snakemake@wildcards$pred` enhancers and enhancers without promoter regions (promoter regions as defined by RefSeq) across all biosamples.
-
-
-```{r plottingFractionOverlap, echo=FALSE, warnings=FALSE}
-formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 1) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=catColors) + scale_color_hue(l=50, c=90)
-
-p3 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=n.noPromoters.FractionOverlap, color=CellCat)) + ylab(paste0("Fraction Overlap\n( ", snakemake@wildcards$trait, " variants / all variants)")) + ggtitle("Fraction of variants \n that overlap enhancers (w/o promoters)")
-p4 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=n.FractionOverlap, color=CellCat)) + ylab(paste0("Fraction Overlap\n( ", snakemake@wildcards$trait, " variants / all variants)")) + ggtitle("Fraction of Variants \n that overlap all enhancers")
-p3 <- p3 %>% formatEnrichmentBarPlot()
-p4 <- p4 %>% formatEnrichmentBarPlot()
-ggplotly(p3)
-ggplotly(p4)
+```{r plottingEnrichmentCode_all, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+#ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(ibdEnhancerList[order(ibdEnhancerList$enrichment),"CellType"]))
+ibdEnhancerList$title2 <- "Enhancers (including promoter regions)"
+p2 <- ggplot(ibdEnhancerList, aes(x=enrichment, y=CellType, fill=CellType)) + xlab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + ylab("CellTypes") + facet_wrap(~title2) + theme(legend.position="none") + geom_point() #+ geom_label_repel(data = head(ibdEnhancerList[order(-ibdEnhancerList$enrichment),], 10), aes(label = CellType), color = "black") + theme(legend.position="none")
+p2 <- p2 %>% formatEnrichmentPointPlot() + theme(legend.position="none")
+p2_label <- p2 
 ```
-<br>
-# Plotting Precision-Recall Curves 
-These precision-recall curves seek to plot the performance of choosing the gene with the **best** score per locus. <br> 
-**Precision** = fraction of identified genes corresponding to the list of known genes that affect `r snakemake@wildcards$trait`
-**Recall** = fraction of known genes that were identified. 
 
-This plot seeks to answer the question: <br>
-1. How well does the prediction method connect noncoding credible sets to known disease genes? 
+```{r plottingFractionOverlap, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+formatFractionBarPlot <- function(p) p + mytheme + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=12), axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
 
-<br>
+#ibdFractionOverlap <- enrichPlot
+#ibdFractionOverlap$title1 <- "Enhancers (excluding promoter regions)"
+#ibdFractionOverlap$title2 <- "Enhancers (including promoter regions)"
+ibdFractionOverlap <- ibdEnhancerList
+top10 <- head(ibdFractionOverlap[order(-ibdFractionOverlap$n.noPromoters.FractionOverlap),"CellType"], 10)
 
-```{r plotIndividualGenePrecisionRecall, echo=FALSE, warning=FALSE}
+p3 <- ggplot(ibdFractionOverlap, aes(x=n.noPromoters.FractionOverlap, y=CellType)) + geom_point(alpha = 0.5) + xlab(paste0("Fraction of variants overlapping predicted enhancers \n( ", trait, " variants / all variants)")) + facet_wrap(~title1) + geom_point(data=subset(ibdFractionOverlap, CellType %in% top10), aes(colour=CellType), size=4) + scale_color_discrete(name="CellType") + theme(legend.position="none") + scale_x_continuous(limits = c(0, max(ibdFractionOverlap$n.noPromoters.FractionOverlap)))
+p3 <- p3 %>% formatFractionBarPlot()
 
-greplany <- function(patterns, v) {
-	  match <- rep(FALSE, length(v))
-  for (pattern in patterns) {
-	      match <- match | grepl(pattern, v)
-    }
-    return(match)
-}
+ibdFractionOverlap$CellType <- ordered(ibdFractionOverlap$CellType, levels=ibdFractionOverlap[order(ibdFractionOverlap$n.noPromoters.FractionOverlap),"CellType"])
+p3_plotly <- ggplot(ibdFractionOverlap, aes(x=n.noPromoters.FractionOverlap, y=CellType, fill=CellType)) + xlab(paste0("Fraction of variants overlapping predicted enhancers \n( ", trait, " variants / all variants)")) + facet_wrap(~title1) + theme(legend.position="none") + geom_point()
+p3_plotly <- p3_plotly %>% formatFractionBarPlot() + theme(legend.position="none") #+ scale_x_continuous(limits = c(0, max(ibdFractionOverlap$n.noPromoters.FractionOverlap))) + theme(legend.position="none")
+```
+
+
+```{r plottingFractionOverlap_all, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE, fig.width=6, fig.height=4}
+ibdFractionOverlap$CellType <- ordered(ibdFractionOverlap$CellType, levels=ibdFractionOverlap[order(ibdFractionOverlap$n.FractionOverlap),"CellType"])
+p4 <- ggplot(ibdFractionOverlap, aes(x=n.FractionOverlap, y=CellType, fill = CellType)) + xlab(paste0("Fraction of variants overlapping predicted enhancers \n( ", trait, " variants / all variants)")) + facet_wrap(~title2) + theme(legend.position="none") #+ geom_label_repel(data = head(ibdFractionOverlap[order(-ibdFractionOverlap$n.FractionOverlap),], 10), aes(label = CellType), color = "black") + theme(legend.position="none") 
+p4 <- p4 %>% formatFractionBarPlot() + scale_x_continuous(limits = c(0, max(ibdFractionOverlap$n.FractionOverlap))) + theme(legend.position="none") + geom_point()
+p4_label <- p4 
+```
+
+```{r plotIndividualGenePrecisionRecall, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
 
 gp <- read.delim(snakemake@input$genePredTable, header=T, check.names=F, stringsAsFactors=F, comment.char='#')
 predictors <- colnames(gp)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp))]
-mytheme <- theme_classic() + theme(
-	      			   axis.text = element_text(size = 13),
-    				   axis.title = element_text(size = 15))
 
+mytheme <- theme_classic() #+ theme(
+                           #       axis.text = element_text(size = 13),
+                           #       axis.title = element_text(size = 15))
+
+# import functions from R script
 getPrecisionBaseline <- function(gp) mean(1 / unique(gp[,c("CredibleSet","CredibleSet.nNearbyGenes")])$TotalNearbyGenes)
 
 getPRTable <- function(gp, pred.cols) {
-	  pr <- do.call(rbind, c(
-		with(gp, list(
-			getPrecisionRecall(DistanceRank == 1, knownGene, Method="Closest Gene"),
-			getPrecisionRecall(DistanceToTSSRank == 1, knownGene, Method="Closest TSS"))),
-			lapply(pred.cols, function(col) getPrecisionRecall(gp[,col], gp$knownGene, Method=gsub("^Gene","",col)))
-	))
-  	return(pr)
+        pr <- do.call(rbind, c(
+              with(gp, list(
+                      getPrecisionRecall(DistanceRank == 1, knownGene, Method="Closest Gene"),
+                      getPrecisionRecall(DistanceToTSSRank == 1, knownGene, Method="Closest TSS"))),
+                      lapply(pred.cols, function(col) getPrecisionRecall(gp[,col], gp$knownGene, Method=gsub("^Gene","",col)))
+      ))
+      return(pr)
 }
 
 getPRPlot <- function(pr, baseline=NULL, xlab="Recall") {
-	pr <- pr %>% group_by(Method) %>% mutate(n=n())
-  	pr.points <- pr %>% filter(n==1)
-	pr.lines <- pr %>% filter(n>1)
-	p <- ggplot(pr.points, aes(x=Recall, y=Precision, color=Method))
-	if (!is.null(baseline)) p <- p + geom_hline(yintercept=baseline, color='gray', linetype='dashed')
-	p <- p + geom_point(size=3)
-        p <- p + geom_line(data=pr.lines)
-        p <- p + mytheme + coord_fixed() + xlim(0,1) + ylim(0,1) + xlab(xlab) + ylab("Precision")
-	return(p)
+      #PredictionType <- strsplit(pr$Method, split = ".")
+      pr <- pr %>% group_by(Method) %>% mutate(n=n())
+      pr <- separate(data = pr, col = Method, into = c("PredictionType", "Predictor"), sep = "\\.")
+      cg_index <- grep("Closest Gene", pr$PredictionType)
+      ct_index <- grep("Closest TSS", pr$PredictionType)
+      pr$Predictor[cg_index] <- "Closest Gene"
+      pr$Predictor[ct_index] <- "Closest TSS"
+      numMethods <- length(unique(pr$Predictor)) - 2
+      Methods <- unique(pr[(grep("^Closest", pr$Predictor, invert=TRUE)), "Predictor"])  
+      
+      pr$PredictionType[cg_index] <- "PredictionMax"
+      pr$PredictionType[ct_index] <- "PredictionMax"
+      pr$Group <- 1
+      pr$Group[ct_index] <- 2
+
+      for (i in 1:numMethods){
+        Method <- Methods[i]
+        index = grep(as.character(paste0(Method, "")), pr$Predictor)
+        pr$Group[index] <- i+2 	
+      }
+       
+      #pr <- pr[order(pr$Method), ]
+      pr.points <- pr %>% filter(n==1)
+      pr.lines <- pr %>% filter(n>1)
+      p <- ggplot(pr.points, aes(x=Recall, y=Precision, shape=PredictionType, color=Predictor)) #+ geom_line(aes(group = Group))
+      if (!is.null(baseline)) p <- p + geom_hline(yintercept=baseline, color='gray', linetype='dashed')
+      p <- p + geom_point(size=3)
+      p <- p + geom_line(aes(group = Group))#data=pr.lines)
+      p <- p + mytheme + coord_fixed() + xlim(0,1) + ylim(0,1) + xlab(xlab) + ylab("Precision")
+      return(p)
 }
 
 doOneKnownGeneList <- function(gene.list.name, gp, predictors, maxKnownGenes=1, knownGeneMaxDistance=1000000) {
-	## Current logic: Filter the gene prediction table to those credible sets with exactly one known gene nearby
-	gp.plot <- gp %>% filter(DistanceToTSS <= knownGeneMaxDistance) %>%
-		mutate(knownGene=TargetGene %in% knownGenes[[gene.list.name]]) %>%
-		group_by(CredibleSet) %>% mutate(nKnownGenes=sum(knownGene)) %>% ungroup() %>%
-		filter(nKnownGenes > 0 & nKnownGenes <= maxKnownGenes & CredibleSet.NoncodingWithSigVariant) %>% as.data.frame()
-	pr <- getPRTable(gp.plot, predictors)
-	p  <- getPRPlot(pr, baseline=getPrecisionBaseline(gp), xlab=paste0("Recall (n=",sum(gp.plot$knownGene),")"))
-	print(p)
+       ## Current logic: Filter the gene prediction table to those credible sets with exactly one known gene nearby
+       gp.plot <- gp %>% filter(DistanceToTSS <= knownGeneMaxDistance) %>%
+               mutate(knownGene=TargetGene %in% knownGenes[[gene.list.name]]) %>%
+               group_by(CredibleSet) %>% mutate(nKnownGenes=sum(knownGene)) %>% ungroup() %>%
+               filter(nKnownGenes > 0 & nKnownGenes <= maxKnownGenes & CredibleSet.NoncodingWithSigVariant) %>% as.data.frame()
+       #pr <- getPRTable(gp.plot, predictors)
+       return(gp.plot)
 }
 
 ####################################################################
 ## PLOT:
-write.table(gp, file="hello.1.tsv")
 for (gl in colnames(knownGenes))
-	  doOneKnownGeneList(gl, gp, predictors)
-write.table(gp, file="hello.tsv")
+	gp.plot <- doOneKnownGeneList(gl, gp, predictors)
+	nRecall <- sum(gp.plot$knownGene)
+	pr <- getPRTable(gp.plot, predictors)
+	singlePR  <- getPRPlot(pr, baseline=getPrecisionBaseline(gp), xlab=paste0("Recall (n=",nRecall,")")) 
 dev.off()
+
 ```
 
-# Plotting aggregate precision-recall curves for `r snakemake@wildcards$trait` 
-
-```{r plotAggregatePR , echo=FALSE, warning=FALSE}
+```{r plotAggregatePR , echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
 # PLOT Aggregate Precision-Recall Curves
 names = strsplit(snakemake@input$allgenePredTable, " ") %>% unlist()
 gp.all <- read.delim(names[1], header=T, check.names=F, stringsAsFactors=F, comment.char='#')
 mergecols <- colnames(gp.all[, 1:10])
-#mergecols <- c('trait','CredibleSet','CredibleSet.AnyCodingVariant','CredibleSet.AnySpliceSiteVariant','CredibleSet.NoncodingWithSigVariant','CredibleSet.AnyPrediction','CredibleSet.nNearbyGenes','TargetGene','TargetGene.chr','TargetGene.TSS')
-write.table(gp.all, file="gp.all.1.tsv")
-
-for (i in 2:length(names)){
-	temp = read.delim(file=names[i], header=T, check.names=F, stringsAsFactors=F, comment.char='#')
-	gp.all = merge(gp.all, temp, by=mergecols)
+if (length(names) > 1){
+	for (i in 2:length(names)){
+	       temp = read.delim(file=names[i], header=T, check.names=F, stringsAsFactors=F, comment.char='#')
+	       gp.all = merge(gp.all, temp, by=mergecols)
+	}
 }
-write.table(gp.all, file="gp.all.tsv")
-predictors <- colnames(gp.all)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp.all))]
-for (gl in colnames(knownGenes))	
-	doOneKnownGeneList(gl, gp.all, predictors)
 
+predictors <- colnames(gp.all)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp.all))]
+for (gl in colnames(knownGenes))
+	gp.plot <- doOneKnownGeneList(gl, gp.all, predictors, maxKnownGenes=length(knownGenes))
+	aggPR <- getPRTable(gp.plot, predictors)
+aggCurve <- getPRPlot(aggPR, baseline=getPrecisionBaseline(gp.all), xlab=paste0("Recall (n=",nRecall,")"))
 dev.off()
 
 ```
 
-<br>
-Aggregate Cumulative Density and Density plots across all predictors for enrichment values with all enhancer regions as well as enhancer regions (without promoters)
-<br>
-
-```{r plotAggregatecdf, echo=FALSE}
+```{r plotAggregatecdf, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
 
 enr.all = read.delim(file=enrichmentTables[1], sep='\t', header=TRUE, stringsAsFactors = FALSE)
 enr.all$predictionSet = all_predictors[1]
-for (i in 2:length(enrichmentTables)){
-	temp = read.delim(file=enrichmentTables[i], sep='\t', header=TRUE, stringsAsFactors = FALSE)
-        temp$predictionSet = all_predictors[i]
-	enr.all = rbind(enr.all, temp)
+if (length(enrichmentTables) >1){
+	for (i in 2:length(enrichmentTables)){
+		        temp = read.delim(file=enrichmentTables[i], sep='\t', header=TRUE, stringsAsFactors = FALSE)
+	        	temp$predictionSet = all_predictors[i]
+			enr.all = rbind(enr.all, temp)
+	}
 }
 enr.all = enr.all[order(enr.all$enrichment.NoPromoters),]
 #if (!is.na(snakemake@params$filterCellTypes)){
-#	cells = read.csv(file=opt$filterCellTypes, sep='\t', header=TRUE, stringsAsFactors = FALSE)
+#       cells = read.csv(file=opt$filterCellTypes, sep='\t', header=TRUE, stringsAsFactors = FALSE)
 #        enr.all = enr.all[enr.all$CellType %in% cells$cell, ]
-#}
+#}/
+formatAccumulatedBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=12), axis.text.x=element_text(angle=60,hjust=1), legend.position='none')
 
-cdf = ggplot(enr.all, aes(enrichment.NoPromoters, col=predictionSet)) + 
-	stat_ecdf(geom = "step") + ylab('Cumulative fraction') + 
-	xlab('Enrichment (GWAS variants/all common variants)') + 
-	theme_minimal() + 
-	scale_color_discrete(name='Prediction set') + 
-	labs(title = "Density Plot for all enhancers (w/o promoter regions)")
-
-d = ggplot(enr.all,aes(x=enrichment.NoPromoters, col=predictionSet)) + 
-	geom_density() + 
-	theme_minimal() + 
-	ylab('Density') + 
-	xlab('Enrichment (GWAS variants/all common variants)') + 
-	scale_color_discrete(name='Prediction set') + 
-	labs(title = "Density Plot for all enhancers (w/o promoter regions)")
-
-ggplotly(cdf)
-ggplotly(d)
+fig1 = ggplot(enr.all, aes(enrichment.NoPromoters, col=predictionSet)) +
+	stat_ecdf(geom = "step") + 
+	ylab('Cumulative fraction') +
+	xlab(paste0('Enrichment \n ( ',trait, ' variants/all common variants)')) +
+	mytheme + xlim(0,22) +
+	scale_color_discrete(name='Prediction set') +
+	theme(legend.position='bottom left')
 
 enr.all = enr.all[order(enr.all$enrichment),]
-cdf = ggplot(enr.all, aes(enrichment, col=predictionSet)) + 
-	stat_ecdf(geom = "step") + 
-	ylab('Cumulative fraction') + 
-	xlab('Enrichment (GWAS variants/all common variants)') + 
-	theme_minimal() + 
+fig2 = ggplot(enr.all, aes(enrichment, col=predictionSet)) +
+	stat_ecdf(geom = "step") +
+	ylab('Cumulative fraction') +
+	xlab(paste0('Enrichment \n ( ', trait, ' variants/all common variants)')) +
+	mytheme + xlim(0,22) +
 	scale_color_discrete(name='Prediction set') + 
-	labs(title = "Density Plot for all enhancers")
-d = ggplot(enr.all,aes(x=enrichment, col=predictionSet)) + 
-	geom_density() + 
-	theme_minimal() + 
-	ylab('Density') + 
-	xlab('Enrichment (GWAS variants/all common variants)') + 
-	scale_color_discrete(name='Prediction set') + 
-	labs(title = "Density Plot for all enhancers")
+	theme(legend.position='bottom left')
 
-ggplotly(cdf)
-ggplotly(d)
+```{r boxPlot, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+fig1a = ggplot(enr.all, aes(x=predictionSet, y=enrichment.NoPromoters, fill=predictionSet)) + 
+	ylab(paste0('Enrichment \n ( ', trait, ' variants/all common variants)')) + xlab('') +
+	scale_color_discrete(name='Prediction set') 
+fig1a <- fig1a %>% formatAccumulatedBarPlot()
+
+fig2a = ggplot(enr.all, aes(x=predictionSet, y=enrichment, fill=predictionSet)) + 
+	ylab(paste0('Enrichment \n ( ', trait, ' variants/all common variants)')) + xlab('') +
+	scale_color_discrete(name='Prediction set')
+fig2a <- fig2a %>% formatAccumulatedBarPlot()
+```
+# Summary of `r snakemake@wildcards$pred` for `r snakemake@wildcards$trait` traits
+This report shows summary statistics produced by the disease variant validation pipeline for predictions made by **`r snakemake@wildcards$pred`**. <br>
+The following report is done for **`r snakemake@wildcards$trait`** traits. <br>
+
+```{r summary,  echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, fig.width=18, fig.height=5}
+
+p1_title <- p1 
+p3_title <- p3 
+singlePR_title <- singlePR + ggtitle('C') 
+aggCurve_title <- aggCurve + ggtitle('D') 
+#fig2_title <- fig2 + ggtitle('E') 
+#fig2a_title <- fig2a + ggtitle('F') 
+
+ggarrange(p1_title, p3_title, labels=c("A", "B"), nrow=1)
+```
+```{r summary1, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=8} 
+patchwork <- (singlePR_title + aggCurve_title)
+patchwork
+```
+<br>
+**Fig1. `r snakemake@wildcards$pred` maps connecting fine-mapped variants to enhancer, genes and celltypes. a**, Enrichment of fine-mapped `r snakemake@wildcards$trait` variants (PIP>10%) in `r snakemake@wildcards$pred` enhancers. **b**, Fraction of fine-mapped `r snakemake@wildcards$trait` variants (PIP>10%) overlapping `r snakemake@wildcards$pred` enhancers. **c**,  Fraction of noncoding variants above a given PIP threshold that overlap an `r snakemake@wildcards$pred` enhancer in any biosample. Black line, weighted average across all traits. Traces are shown for PIP thresholds above which there are at least five variants. Dashed line, fraction of all common noncoding variants that overlap  `r snakemake@wildcards$pred` enhancers." **d**,  Precision–recall plot of connections between noncoding `r snakemake@wildcards$trait`  credible sets and known `r snakemake@wildcards$trait`-associated genes.
+<br>
+
+# To what extent are `r snakemake@wildcards$trait` GWAS variants enriched in predicted enhancers?
+## Enrichment of GWAS variants for enhancers (including promoter regions)  and (excluding promoter regions)
+These barplots calculates the enrichment for fine-mapped `r snakemake@wildcards$trait` variants (PIP >= 10%) in `r snakemake@wildcards$pred` enhancers (left) and enhancers without promoter regions (promoter regions as defined by RefSeq) (right) across all biosamples. 
+<br>
+
+```{r enrichmentplot1, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap}
+
+ptly1 <- ggplotly(p1_plotly)
+ptly2 <- ggplotly(p2_label)
+subplot(ptly1, ptly2, nrows=1, titleX = TRUE, titleY=TRUE)
+cap <- paste0("Fig2. Enrichment of fine-mapped ",trait," variants (PIP >= 10%) in enhancers (including promoter regions) across all biosamples.")
 ```
 
-```{r boxPlot, echo=FALSE}
-bp = ggplot(enr.all, aes(x=predictionSet, y=enrichment.NoPromoters, fill=predictionSet)) + geom_boxplot() +
-	theme_minimal() + ylab('Enrichment (GWAS variants/all common variants)') + xlab('') + 
-	scale_fill_viridis(discrete=TRUE) +
-	theme(legend.position='none', 
-	      axis.text.x=element_text(angle=60,hjust=1)) + 
-	labs(title = "Enrichment Plot for all enhancers (w/o promoter regions)")
-ggplotly(bp)
-
-bp = ggplot(enr.all, aes(x=predictionSet, y=enrichment, fill=predictionSet)) + geom_boxplot() +
-   	theme_minimal() + ylab('Enrichment (GWAS variants/all common variants)') + xlab('') +
-	scale_fill_viridis(discrete=TRUE) +
-	theme(legend.position='none',
-	      axis.text.x=element_text(angle=60,hjust=1)) + 
-	labs(title = "Enrichment Plot for all enhancers")
-ggplotly(bp)
+## Enrichment tables {.tabset}
+Tables with values used to derive enrichment values and # fraction overlap for enhancers (including promoter regions) and enhancers (excluding promoter regions). 
+```{r doSomething, include=FALSE}
+htmltools::tagList(DT::datatable(matrix()))
 ```
+
+```{r dataTables, echo=FALSE, results='asis'}
+
+# get index for current predictor to show the right data
+index = which(all_predictors==pred)[[1]]
+cat("  \n###",  all_predictors[index], "  \n")
+table.current = read.table(enrichmentTables[index], header=TRUE) %>% dplyr::select(CellType, enrichment, enrichment.NoPromoters, n, total, n.NoPromoters, total.NoPromoters )
+cat("  \n")
+table.current <- transform(table.current, n.FractionOverlap = n / total)
+table.current <- transform(table.current, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
+table.current <- table.current %>% dplyr::select(CellType, enrichment, enrichment.NoPromoters, n.FractionOverlap, n.noPromoters.FractionOverlap)
+cat(knitr::knit_print(datatable(table.current, rownames = FALSE, filter="top", 
+			options=list(pageLength = 5, scrollX=T))))
+cat("  \n")
+cat("  \n")
+```
+
+# What fraction of `r snakemake@wildcards$trait` variants overlap predicted enhancers?
+## Variant overlap of GWAS variants for enhancers (including promoter regions) (left) and enhancers (excluding promoter regions) (right)
+We plot the fraction overlap of `r snakemake@wildcards$trait` variants (PIP >= 10%) that overlap `r snakemake@wildcards$pred` enhancers and enhancers without promoter regions (promoter regions as defined by RefSeq) across all biosamples.
+
+```{r enrichmentplot3, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap}
+ptly3 <- ggplotly(p3_plotly)
+ptly4 <- ggplotly(p4_label)
+subplot(ptly3, ptly4, nrows=1, titleX = TRUE)
+cap <- paste0("Fig3. Fraction overlap of fine-mapped ",trait," variants (PIP >= 10%) in \n enhancers (including promoter regions) across all biosamples. Box plots show median (middle line) and interquartile range (boxes) and whiskers show observations less than or equal to quartiles ± 1.5× the interquartile range.")
+```
+
+# How well do predictions connect noncoding credible sets to known disease genes?
+These precision-recall curves seek to plot the performance of choosing the gene with the **best** score per locus. <br>
+**Precision** = fraction of identified genes corresponding to the list of known genes that affect `r snakemake@wildcards$trait` <br>
+**Recall** = fraction of known genes that were identified. <br>
+```{r plot6, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.width=10, fig.height=4}
+singlePR + aggCurve
+cap <- paste0("Fig5. Precision–recall plot of connections between noncoding ",trait, " credible sets and known ", trait,"-associated genes, where recall is the fraction of credible sets for which the known
+	      gene is identified (sensitivity) and precision is the fraction of predicted
+	      genes corresponding to known genes (positive predictive value). As baseline, the heuristic of assigning each GWAS credible
+	      set to the closest gene—a method that is widely used to annotate GWAS
+	      loc. Simiarly, a similar approach — which selects the closest
+	      transcription start site (TSS) was also added. ")
+```
+
+# Summary enrichment plots across all predictions 
+<br>
+Aggregate Cumulative Density and Density plots across all predictors for enrichment values in all enhancer regions (without promoters)
+Enrichment values are presented in two ways : a cumulative density plot (left) and barplots (right) <br>
+
+```{r multipanelAgg, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap}
+ptly5 <- ggplotly(fig1 + theme(legend.position='none')) 
+ptly5a <- ggplotly(fig1a) 
+subplot(ptly5, ptly5a, nrows=1, titleX = TRUE, titleY = TRUE, shareX = FALSE, shareY = FALSE, margin=0.07) %>% layout(title ="Aggregate Enrichment plots for enhancers (excluding promoter regions)", font=list(size = 10))
+
+cap <- paste0("Fig6. Aggregate enrichment plots, cumulative density plot (left) and barplots (right) of GWAS variants in enhancers (excluding promoter regions) across different predictors. 
+		These are enrichment values calculated for ", trait, " traits across all predictors.") 
+```
+
+Consolidating enrichment values across all traits and all predictions for enhancers (including promoter regions).
+<br>
+```{r multipanelAgg_all, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap}
+ptly6 <- ggplotly(fig2 + theme(legend.position='none'))
+ptly6a <- ggplotly(fig2a)
+subplot(ptly6, ptly6a, nrows=1, titleX = TRUE, titleY = TRUE, margin=0.07) %>% layout(title ="Aggregate Enrichment plots for enhancers (including promoter regions)", font=list(size = 10))
+
+cap <- paste0("Fig7. Aggregate enrichment plots, cumulative density plot (left) and barplots (right) of GWAS variants in enhancers (including promoter regions) across different predictors.
+	These are enrichment values calculated for ", trait, " traits across all predictors.")
+```
+
+# Methods 
+**GWAS traits and loci** <br> 
+Summary statistics for IBD, Crohn’s disease and ulcerative colitis (European ancestry only)51 from https://www.ibdgenetics.org/downloads.html. We obtained fine-mapping results and summary statistics for 71 other traits based on an unpublished analysis ( Jacob Ul, M. Kanai and Hillary Finucane, unpublished data) that analysed data from the UK Biobank. (fine-mapping data are available at https://www.finucanelab.org/data). In this analysis, up to 361,194 individuals of white British ancestry with available phenotypes and variants with INFO > 0.8, minor allele frequency > 0.01%, and Hardy–Weinberg equilibrium P > 1 × 10−10 were included in the GWAS. For all traits, except where specified, we considered only the ‘noncoding credible sets’—that is, those that did not contain any variant in a coding sequence or within 10 bp of a splice site annotated in the RefGene database (downloaded from UCSC Genome Browser on 24 June 2017). 
+<br>
+
+**Defining enriched biosamples for each trait** <br> 
+For a given trait, we intersected variants with PIP ≥ 10% in noncoding
+credible sets with `r snakemake@wildcards$pred` enhancers (or other genomic annotations). For
+each biosample, we calculated a P value using a binomial test comparing the fraction at which PIP ≥ 10% variants overlapped `r snakemake@wildcards$pred` enhancers
+with the fraction at which all common variants overlap `r snakemake@wildcards$pred` enhancers
+in that cell type. We calculated the latter using common variants in the
+1000 Genomes Projects as described in the ‘Stratified linkage disequilibrium score regression’ section. For each trait, we defined a biosample as significantly enriched for that trait if the Bonferroni-corrected
+binomial P value was <0.001.
+<br> 
+
+**Comparison of enrichment of fine-mapped variants in enhancer
+regions and other enhancer-gene predictions** <br>
+We compared the enrichment of fine-mapped variants in ABC enhancers and other enhancer definitions. . We analysed
+each of the previous studies from Fig 1d (summary plot) reporting cell-type specific enhancer-gene predictions.  For each of the methods below, we downloaded previous predictions of enhancer–gene links, , and assessed
+their ability to identify `r snakemake@wildcards$trait`-associated genes. . For this analysis, we used the predictions from each method to overlap fine-mapped variants
+(PIP ≥ 10%) with enhancers in any cell type and assigned variants to the predicted gene(s).
+<br>
+
+**Enhancer-gene correlation (ChromHMM2017)** <br>
+Gene expression was previously correlated with five active chromatin marks (H3K27ac,
+H3K9ac, H3K4me1, H3K4me2 and DNase I hypersensitivity) across 56
+biosamples, and these correlation links were then used to make predictions for the predicted enhancers (regions with the ‘7Enh’ ChromHMM
+state) in 127 biosamples from the Roadmap Epigenome Atlas. We
+downloaded these predictions from www.biolchem.ucla.edu/labs/
+ernst/roadmaplinking and made predictions using the confidence score.
+
+<br>
+**Enhancer-gene correlation (EpiMap)** <br>
+Gene expression was previously correlated with five active chromatin marks (H3K27ac,
+H3K9ac, H3K4me1, H3K4me2 and H3K4me3) across 304 biosamples. A negative set of correlations for each enhancer was computed using random genes in a different chromosome. We predicted links for each biosample and ChromHMM enhancer state separately (states E7, E8, E9, E10, E11 and E15). Predictions were made by training an XGBoost classifier on the positive set of all valid links against their paired negative links, using precomputed correlations and distance to the transcription start site as features, and keeping all links with a probability above 5/7. We downloaded these predictions from https://personal.broadinstitute.org/cboix/epimap/links/. 
+<br> 
