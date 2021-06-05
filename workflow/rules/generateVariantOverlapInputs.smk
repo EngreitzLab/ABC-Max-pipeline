@@ -77,21 +77,24 @@ rule computeBackgroundOverlap_noPromoters:
 		shell(
 			"""
 			set +o pipefail;
-
+			# Intersecting a background list of variants with predicted enhancers (excluding promoter regions)
+			# to compute background rate at which common variants overlap enhancers	
 			zcat {input.overallOverlap} | head -1 | gzip -c > {output.overallOverlap_noPromoter}
 			zcat {input.overallOverlap} | sed 1d > {input.overallOverlap}.tmp 
 			bedtools intersect -v -a {input.overallOverlap}.tmp -b {input.geneTSS} | gzip -c >> {output.overallOverlap_noPromoter} 
 			
 
-			# Getting the cell type column and counting
+			# Getting the cellType column and counting the number of background overlaps 
+			# This is used as an input file in AnnotateCredibleSets.R where we calculate enrichment 
+			# of GWAS variants across different cellTypes
 			zcat {output.overallOverlap_noPromoter} | cut -f 7 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.overallOverlapCounts_noPromoter};
 			
-                        # Compute fraction of noncoding variants overlapping predictions in any cell type
+                        # Compute fraction of noncoding variants overlapping predictions in each respective cellType
 			zcat {output.overallOverlap_noPromoter} | bedtools intersect -v -a stdin -b {input.CDS} | cut -f 1-3,7 | sort | uniq | cut -f 4 | sort | uniq -c | sed 's/^ *//' | tr ' ' '\\t' > {output.noncodingOverlap_noPromoter}
-			
+			# Remove tmp file
 			rm {input.overallOverlap}.tmp
 
-			# Remove promoter variants from bgVars 
+			# Remove promoter variants from bgVars
 			zcat {input.bgVars} | bedtools intersect -v -a stdin -b {input.geneTSS} | gzip > {output.bgVars_noPromoter}
 			""")
 
@@ -156,8 +159,10 @@ rule overlapVariants_noPromoter:
 		shell(
 			"""
 			set +o pipefail;
-
+			# Creating an empty file with the final columns
 			zcat {input.overlap} | head -1 | gzip > {output.overlap_noPromoter}
+			
+			# Removing promoter regions from disease variants
 			zcat {input.overlap} | sed 1d | bedtools intersect -g {params.chrSizes} -b {input.geneTSS} -a stdin | gzip >> {output.overlap_noPromoter}
 		 					
 			""")
@@ -178,8 +183,13 @@ rule generateAnnotateVariantInputs:
 		shell(
 			"""
 			set +o pipefail;
+			# Count the number of background variants and save into an output file
 			zcat {input.bgVars} | cut -f4 | sort -u | wc -l > {output.bgVars_count}
+			# Count the number of background variants (excluding variants that overlap promoters and save into 
+			# an output file 
 			zcat {input.bgVars_noPromoter} | cut -f4 | sort -u | wc -l > {output.bgVars_noPromoter_count}
+			# Count the number of background variants that overlap predicted enhancers and save into an output file
 			zcat {input.bgOverlap} | cut -f4,8 | sort -u | awk '{{count[$2]++}}END{{for(j in count) print j"\t"count[j]}}' | sort -u | cut -f1,2 > {output.bgOverlap_count}
+			# Count the number of background variants that overlap predicted enhancers (excluding promoter regions) and save into an output file
 			zcat {input.bgOverlap_noPromoter} | cut -f4,8 | sort -u | awk '{{count[$2]++}}END{{for(j in count) print j"\t"count[j]}}' | sort -u | cut -f1,2> {output.bgOverlap_noPromoter_count}
 			""")

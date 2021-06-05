@@ -213,7 +213,7 @@ rule plottingReport:
 		cellTypeEnrichments = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv"),
 		genePredTable = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.Dedup.tsv",outdir=config["outDir"]),
 		allgenePredTable = expand("{outdir}{pred}/{{trait}}/GenePredictions.allCredibleSets.tsv",outdir=config["outDir"], pred=all_predictions),
-		knownGenes = lambda wildcard: str(config["traitDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"])),
+		knownGenes = lambda wildcard: str(config["geneListDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"])),
 		enrichmentFiles = expand("{outdir}{pred}/{{trait}}/enrichment/Enrichment.CellType.vsScore.{{trait}}.tsv", outdir=config['outDir'], pred=all_predictions),
 		allFlat = expand("{outdir}{{pred}}/{trait}/data/all.flat.tsv", outdir=config["outDir"], trait=all_traits)
 	params:

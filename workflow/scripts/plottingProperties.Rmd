@@ -101,49 +101,20 @@ subset_predictionFile$feature = "Enhancers"
 mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1), axis.text=element_text(size=13))#, axis.text = element_text(size = 13), axis.title = element_text(size = 15))
 
 formatEnrichmentBarPlot <- function(p) p + geom_boxplot(outlier.shape = NA) + theme_classic() + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=15)) #, legend.position='none')
-#formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=10), legend.position='none') + geom_boxplot(outlier.shape = NA)
 subset_predictionFile$width <- unlist(subset_predictionFile$width)
-#subset_predictionFile$title1 <- "Enhancers"
-#widthPlot <- ggplot(subset_predictionFile, aes(x=Method, y=width, fill=Method)) + ylab(paste0("Width ")) + labs(title=paste0("Width of enhancer regions across all predictions")) + xlab("Prediction Method") + ylim(0, max(subset_predictionFile$width)) #+ facet_wrap(~title1)
-#widthPlot <- widthPlot %>% formatEnrichmentBarPlot()
-## figure caption
-#widthPlotly <- ggplotly(widthPlot)
-```
-
-```{r plottingNumEnhancers, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
 subset_predictionFile$n <- unlist(subset_predictionFile$n)
-#numEnhancers$title1 <- "Enhancers"
-#numPlot <- ggplot(numEnhancers, aes(x=Method, y=n, fill=Method)) + ylab(paste0("Number")) + labs(title=paste0("Number of enhancers across all biosamples")) + xlab("Prediction Method") + ylim(0, max(numEnhancers$n)) # + facet_wrap(~title1)
-#numPlot <- numPlot %>% formatEnrichmentBarPlot()
-#
-#numPlotly <- ggplotly(numPlot)
-```
-```{r plottingAccessibility, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
 subset_predictionFile$DHS <- unlist(subset_predictionFile$DHS)
-#accessibility <- ggplot(subset_predictionFile, aes(x=Method, y=DHS, fill=Method)) + ylab(paste0("log2(DNase)")) + labs(title=paste0("Accessibility of enhancers across all biosamples")) + xlab("Prediction Method") + ylim(0, max(subset_predictionFile$DHS)) #+ facet_wrap(~title1)
-#accessibility <- accessibility %>% formatEnrichmentBarPlot()
-
-#accessibilityplotly <- ggplotly(accessibility)
-```
-```{r plottingAcetylation , echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
 subset_predictionFile$H3K27ac <- unlist(subset_predictionFile$H3K27ac)
-#acetylation <- ggplot(subset_predictionFile, aes(x=Method, y=H3K27ac, fill=Method)) + ylab(paste0("log2(H3K27ac)")) + labs(title=paste0("Acetylation of enhancers across all biosamples")) + xlab("Prediction Method") + ylim(0, max(subset_predictionFile$DHS)) #+ facet_wrap(~title1)
-#acetylation <- acetylation %>% formatEnrichmentBarPlot()
-
-#acetylationplotly <- ggplotly(acetylation)
 ```
 
 ```{r plottingFractionOverlap, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
 candidateFile <- read.delim(candidateRegions[1], sep = "\t", header=FALSE, check.names=F, stringsAsFactors=F, row.names=NULL)
+colnames(candidateFile) <- c("chr", "start", "end", "DHS", "H3K27ac", "CellType")
 # rename columns of candidate File 
-candidateFile$chr <- candidateFile[1]
-candidateFile$start <- candidateFile[2]
-candidateFile$end <- candidateFile[3]
 candidateFile$width <- candidateFile['end'] - candidateFile['start']
 candidateFile$Method <- lists_of_predictions[1]
-candidateFile$DHS <- log2(candidateFile[4]+1)
-candidateFile$H3K27ac <- log2(candidateFile[5]+1)
-candidateFile$CellType <- candidateFile[6]
+candidateFile$DHS <- log2(candidateFile['DHS']+1)
+candidateFile$H3K27ac <- log2(candidateFile['H3K27ac']+1)
 candidateFile <- candidateFile %>% dplyr::select(chr, start, end, width, Method, DHS, H3K27ac, CellType)
 numCandidate <- candidateFile %>% group_by(CellType) %>% tally()
 subset_candidateFile <- sample_n(candidateFile, num_examples)
@@ -151,15 +122,12 @@ numCandidate <- data.frame(n=numCandidate$n, Method=lists_of_predictions[1])
 if (length(candidateRegions) > 1){
 	for (i in 2:length(candidateRegions)){
 		tryCatch({
-	       		temp = read.delim(file=candidateRegions[i], sep='\t', header=TRUE, stringsAsFactors = FALSE, row.names=NULL)
-			temp$chr <- temp[1]
-			temp$start <- temp[2]
-			temp$end <- temp[3]
+	       		temp = read.delim(file=candidateRegions[i], sep='\t', header=FALSE, check.names=F, stringsAsFactors = F, row.names=NULL)
+			colnames(temp) <- c("chr", "start", "end", "DHS", "H3K27ac", "CellType")
 			temp$width <- temp['end'] - temp['start']
 			temp$Method <- lists_of_predictions[i]
-			temp$DHS <- log2(temp[4]+1)
-			temp$H3K27ac <- log2(temp[5]+1)
-			temp$CellType <- temp[6]
+			temp$DHS <- log2(temp['DHS']+1)
+			temp$H3K27ac <- log2(temp['H3K27ac']+1)
 			temp <- temp %>% dplyr::select(chr, start, end, width, Method, DHS, H3K27ac, CellType)
 			temp_numCandidate <- temp %>% group_by(CellType) %>% tally() 
 			temp_numCandidate <- data.frame(n=temp_numCandidate$n, Method=lists_of_predictions[i])
@@ -186,10 +154,10 @@ subset_candidateFile$H3K27ac <- unlist(subset_candidateFile$H3K27ac)
 
 ```{r plottingCandidateNumEnhancers, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
 rownames(numCandidate) <- rownames(numEnhancers) <- rownames(subset_candidateFile) <- rownames(subset_predictionFile) <- NULL
-#write.table(numCandidate, file="numCandidate.tsv")
-#write.table(numEnhancers, file="numEnhancers.tsv")
-#write.table(subset_candidateFile, file="subset_candidateFile.tsv")
-#write.table(subset_predictionFile, file="subset_predictionFile.tsv")
+write.table(numCandidate, file="numCandidate.tsv")
+write.table(numEnhancers, file="numEnhancers.tsv")
+write.table(subset_candidateFile, file="subset_candidateFile.tsv")
+write.table(subset_predictionFile, file="subset_predictionFile.tsv")
 numDF <- rbind(numCandidate, numEnhancers)
 aggregateDF <- rbind(subset_candidateFile, subset_predictionFile)
 numPlot <- ggplot(numDF, aes(x=Method, y=n)) + ylab(paste0("Number of regions"))  + xlab("Prediction Method") + ylim(0, max(numDF$n)) + geom_boxplot(aes(fill=feature)) + theme_classic() + theme(legend.position="none")
@@ -293,6 +261,8 @@ h3k27ac = h3k27ac[subcols]
 h3k27ac$title1 = "log2(H3K27ac) of regions"
 newAggregateDF = rbind(width, dhs, h3k27ac)
 newAggregateDF$title1 = newAggregateDF[order(newAggregateDF$title1), "title1"]
+newAggregateDF$feature = ordered(newAggregateDF$feature, levels=c("Candidate Enhancers", "Enhancers"))
+#newAggregateDF$Value = ordered(newAggregateDF$Value, levels=c("width", "DHS", "H3K27ac"))
 #plot_grid(cdfWidth, cdfAccessible, cdfAcetylation, cdfEnhWidth, cdfEnhAccessible, cdfEnhAcetylation, labels="AUTO", ncol=3)ggregateDF
 ggplot(newAggregateDF, aes(x=Value, color=Method)) + stat_ecdf(geom="step") + facet_wrap( ~ title1 + feature, scales="free_x") + theme_classic()
 
@@ -391,7 +361,8 @@ numBiosamplesWithSimilarEGLinkPlotly <- ggplotly(numBiosamplesWithSimilarEGLinkP
 
 # How many total unique basepairs are contained in the enhancers for each gene across all biosamples?
 numUniquebpVal = numUniquebpVal[order(numUniquebpVal$totalBP),]
-numUniquebpValPlot <- ggplot(numUniquebpVal, aes(x=totalBP, col=Method)) + xlab("Total number of unique basepairs \n in all enhancers (bp) linked to a gene across all biosamples. ") + ylab("Cumulative Density")
+numUniquebpVal$totalBP = as.numeric(numUniquebpVal$totalBP) / 1000
+numUniquebpValPlot <- ggplot(numUniquebpVal, aes(x=totalBP, col=Method)) + xlab("Total number of unique basepairs (kb) \n in all enhancers (bp) linked to a gene across all biosamples. ") + ylab("Cumulative Density")
 numUniquebpValPlot <- numUniquebpValPlot %>% formatCDF()
 numUniquebpValPlotly <- ggplotly(numUniquebpValPlot)
 
