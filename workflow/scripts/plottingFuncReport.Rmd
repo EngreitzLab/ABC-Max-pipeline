@@ -35,12 +35,8 @@ library(patchwork)
 library(ggrepel)
 library(ggpubr)
 # set global chunk options
-knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE, results=FALSE)
 
-#source(file.path(snakemake@params$codeDir, "PlotCellTypeEnrichment.R"))
-#source(file.path(snakemake@params$codeDir, "PlotEnrichmentAggregate.R"))
-#source(file.path(snakemake@params$codeDir, "PlotFractionOverlap.R"))
-#source(file.path(snakemake@params$codeDir, "PlotGenePrecisionRecall.R"))
 source(paste0(snakemake@params$codeDir, "JuicerUtilities.R"))
 source(paste0(snakemake@params$codeDir, "CredibleSetTools.R"))
 
@@ -48,7 +44,6 @@ source(paste0(snakemake@params$codeDir, "CredibleSetTools.R"))
 # names = strsplit(snakemake@input$allgenePredTable, " ") %>% unlist()
 all_predictors = strsplit(snakemake@params$predictors, " ") %>% unlist()
 enrichmentTables = strsplit(snakemake@input$enrichmentFiles, " ") %>% unlist()
-cellCategories <- read.delim(snakemake@params$cellTypeTable, header=T, sep="\t")
 cellEnrichment <- read.delim(snakemake@input$cellTypeEnrichments, sep = "\t", header=TRUE, check.names=F, stringsAsFactors=F, row.names=NULL)
 knownGenes <- read.delim(snakemake@input$knownGenes, header=TRUE, check.names=F, stringsAsFactors=F, comment.char='#')
 trait <- snakemake@wildcards$trait
@@ -58,13 +53,8 @@ pred <- snakemake@wildcards$pred
 ############ DESCRIPTION ###########
 # This function takes in *.Enrichment.vsScore.tsv files and outputs enrichment bar plots across different cell categories as defined by catOrder 
 
-# load in inputs
-#catOrder <- c("myeloid","Bcell","Tcell","hematopoietic","fibroblast","epithelial","other")
-#n <- length(unique(catOrder))
 color = grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-#catColors <- c("green","orange","blue","purple","pink","brown","gray", sample(color, n-7))
-#names(catColors) <- catOrder
-#
+
 ## Calculate Number of variants that overlpa 
 cellEnrichment <- transform(cellEnrichment, n.FractionOverlap = n / total)
 cellEnrichment <- transform(cellEnrichment, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
@@ -72,9 +62,7 @@ cellEnrichment <- transform(cellEnrichment, n.noPromoters.FractionOverlap = n.No
 ## Set theme of plots
 mytheme <- theme_classic() + theme(axis.text.y = element_text(angle = 45, vjust = 1, hjust = 1))
 
-enrichPlot <- merge(cellEnrichment, cellCategories[,c("CellType","Categorical.IBDTissueAnnotations2")], by="CellType")
-ibdEnhancerList <- merge(cellCategories, enrichPlot[, c("CellType", "enrichment", "enrichment.NoPromoters", "n.noPromoters.FractionOverlap", "n.FractionOverlap")], by="CellType")
-#ibdEnhancerList$CellCat <- ordered(ibdEnhancerList$Categorical.IBDTissueAnnotations2, levels=catOrder)
+ibdEnhancerList <- cellEnrichment
 
 formatEnrichmentPointPlot <- function(p) p + xlim(0, 22) + mytheme + geom_vline(xintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=12), axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
 
@@ -94,7 +82,7 @@ p1_plotly <- p1_plotly %>% formatEnrichmentPointPlot() + theme(legend.position="
 ```{r plottingEnrichmentCode_all, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
 #ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(ibdEnhancerList[order(ibdEnhancerList$enrichment),"CellType"]))
 ibdEnhancerList$title2 <- "Enhancers (including promoter regions)"
-p2 <- ggplot(ibdEnhancerList, aes(x=enrichment, y=CellType, fill=CellType)) + xlab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + ylab("CellTypes") + facet_wrap(~title2) + theme(legend.position="none") + geom_point() #+ geom_label_repel(data = head(ibdEnhancerList[order(-ibdEnhancerList$enrichment),], 10), aes(label = CellType), color = "black") + theme(legend.position="none")
+p2 <- ggplot(ibdEnhancerList, aes(x=enrichment, y=CellType, fill=CellType)) + xlab(paste0("Enrichment\n( ", trait, " variants / all variants)")) + ylab("CellTypes") + facet_wrap(~title2) + theme(legend.position="none") + geom_point() 
 p2 <- p2 %>% formatEnrichmentPointPlot() + theme(legend.position="none")
 p2_label <- p2 
 ```
@@ -102,9 +90,6 @@ p2_label <- p2
 ```{r plottingFractionOverlap, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
 formatFractionBarPlot <- function(p) p + mytheme + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=12), axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
 
-#ibdFractionOverlap <- enrichPlot
-#ibdFractionOverlap$title1 <- "Enhancers (excluding promoter regions)"
-#ibdFractionOverlap$title2 <- "Enhancers (including promoter regions)"
 ibdFractionOverlap <- ibdEnhancerList
 top10 <- head(ibdFractionOverlap[order(-ibdFractionOverlap$n.noPromoters.FractionOverlap),"CellType"], 10)
 
@@ -113,13 +98,13 @@ p3 <- p3 %>% formatFractionBarPlot()
 
 ibdFractionOverlap$CellType <- ordered(ibdFractionOverlap$CellType, levels=ibdFractionOverlap[order(ibdFractionOverlap$n.noPromoters.FractionOverlap),"CellType"])
 p3_plotly <- ggplot(ibdFractionOverlap, aes(x=n.noPromoters.FractionOverlap, y=CellType, fill=CellType)) + xlab(paste0("Fraction of variants overlapping predicted enhancers \n( ", trait, " variants / all variants)")) + facet_wrap(~title1) + theme(legend.position="none") + geom_point()
-p3_plotly <- p3_plotly %>% formatFractionBarPlot() + theme(legend.position="none") #+ scale_x_continuous(limits = c(0, max(ibdFractionOverlap$n.noPromoters.FractionOverlap))) + theme(legend.position="none")
+p3_plotly <- p3_plotly %>% formatFractionBarPlot() + theme(legend.position="none") 
 ```
 
 
 ```{r plottingFractionOverlap_all, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE, fig.width=6, fig.height=4}
 ibdFractionOverlap$CellType <- ordered(ibdFractionOverlap$CellType, levels=ibdFractionOverlap[order(ibdFractionOverlap$n.FractionOverlap),"CellType"])
-p4 <- ggplot(ibdFractionOverlap, aes(x=n.FractionOverlap, y=CellType, fill = CellType)) + xlab(paste0("Fraction of variants overlapping predicted enhancers \n( ", trait, " variants / all variants)")) + facet_wrap(~title2) + theme(legend.position="none") #+ geom_label_repel(data = head(ibdFractionOverlap[order(-ibdFractionOverlap$n.FractionOverlap),], 10), aes(label = CellType), color = "black") + theme(legend.position="none") 
+p4 <- ggplot(ibdFractionOverlap, aes(x=n.FractionOverlap, y=CellType, fill = CellType)) + xlab(paste0("Fraction of variants overlapping predicted enhancers \n( ", trait, " variants / all variants)")) + facet_wrap(~title2) + theme(legend.position="none") 
 p4 <- p4 %>% formatFractionBarPlot() + scale_x_continuous(limits = c(0, max(ibdFractionOverlap$n.FractionOverlap))) + theme(legend.position="none") + geom_point()
 p4_label <- p4 
 ```
@@ -129,65 +114,7 @@ p4_label <- p4
 gp <- read.delim(snakemake@input$genePredTable, header=T, check.names=F, stringsAsFactors=F, comment.char='#')
 predictors <- colnames(gp)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp))]
 
-mytheme <- theme_classic() #+ theme(
-                           #       axis.text = element_text(size = 13),
-                           #       axis.title = element_text(size = 15))
-
-# import functions from R script
-getPrecisionBaseline <- function(gp) mean(1 / unique(gp[,c("CredibleSet","CredibleSet.nNearbyGenes")])$TotalNearbyGenes)
-
-getPRTable <- function(gp, pred.cols) {
-        pr <- do.call(rbind, c(
-              with(gp, list(
-                      getPrecisionRecall(DistanceRank == 1, knownGene, Method="Closest Gene"),
-                      getPrecisionRecall(DistanceToTSSRank == 1, knownGene, Method="Closest TSS"))),
-                      lapply(pred.cols, function(col) getPrecisionRecall(gp[,col], gp$knownGene, Method=gsub("^Gene","",col)))
-      ))
-      return(pr)
-}
-
-getPRPlot <- function(pr, baseline=NULL, xlab="Recall") {
-      #PredictionType <- strsplit(pr$Method, split = ".")
-      pr <- pr %>% group_by(Method) %>% mutate(n=n())
-      pr <- separate(data = pr, col = Method, into = c("PredictionType", "Predictor"), sep = "\\.")
-      cg_index <- grep("Closest Gene", pr$PredictionType)
-      ct_index <- grep("Closest TSS", pr$PredictionType)
-      pr$Predictor[cg_index] <- "Closest Gene"
-      pr$Predictor[ct_index] <- "Closest TSS"
-      numMethods <- length(unique(pr$Predictor)) - 2
-      Methods <- unique(pr[(grep("^Closest", pr$Predictor, invert=TRUE)), "Predictor"])  
-      
-      pr$PredictionType[cg_index] <- "PredictionMax"
-      pr$PredictionType[ct_index] <- "PredictionMax"
-      pr$Group <- 1
-      pr$Group[ct_index] <- 2
-
-      for (i in 1:numMethods){
-        Method <- Methods[i]
-        index = grep(as.character(paste0(Method, "")), pr$Predictor)
-        pr$Group[index] <- i+2 	
-      }
-       
-      #pr <- pr[order(pr$Method), ]
-      pr.points <- pr %>% filter(n==1)
-      pr.lines <- pr %>% filter(n>1)
-      p <- ggplot(pr.points, aes(x=Recall, y=Precision, shape=PredictionType, color=Predictor)) #+ geom_line(aes(group = Group))
-      if (!is.null(baseline)) p <- p + geom_hline(yintercept=baseline, color='gray', linetype='dashed')
-      p <- p + geom_point(size=3)
-      p <- p + geom_line(aes(group = Group))#data=pr.lines)
-      p <- p + mytheme + coord_fixed() + xlim(0,1) + ylim(0,1) + xlab(xlab) + ylab("Precision")
-      return(p)
-}
-
-doOneKnownGeneList <- function(gene.list.name, gp, predictors, maxKnownGenes=1, knownGeneMaxDistance=1000000) {
-       ## Current logic: Filter the gene prediction table to those credible sets with exactly one known gene nearby
-       gp.plot <- gp %>% filter(DistanceToTSS <= knownGeneMaxDistance) %>%
-               mutate(knownGene=TargetGene %in% knownGenes[[gene.list.name]]) %>%
-               group_by(CredibleSet) %>% mutate(nKnownGenes=sum(knownGene)) %>% ungroup() %>%
-               filter(nKnownGenes > 0 & nKnownGenes <= maxKnownGenes & CredibleSet.NoncodingWithSigVariant) %>% as.data.frame()
-       #pr <- getPRTable(gp.plot, predictors)
-       return(gp.plot)
-}
+mytheme <- theme_classic() 
 
 ####################################################################
 ## PLOT:
