@@ -148,7 +148,7 @@ rule plotFractionOverlapPosteriorProb:
 rule plotIndividualGenePrecisionRecall:
 	input:
 		genePredTable = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.tsv",outdir=config["outDir"]),
-		knownGenes = lambda wildcard: str(config["predDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
+		knownGenes = lambda wildcard: str(config["geneListDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
 	output:
 		prPdf = os.path.join(config["outDir"], "{pred}/{trait}/GenePrecisionRecall.pdf")
 	params:
@@ -168,7 +168,7 @@ rule plotIndividualGenePrecisionRecall:
 rule plotGenePrecisionRecall:
 	input:
 		genePredTable = expand("{outdir}{pred}/{{trait}}/GenePredictions.allCredibleSets.tsv", pred=all_predictions, outdir=config["outDir"]),
-		knownGenes = lambda wildcard: str(config["predDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
+		knownGenes = lambda wildcard: str(config["geneListDir"]+(trait_config_file.loc[wildcard.trait, "knownGenes"]))
 	output:
 		prPdf = os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf")
 	params:
@@ -225,7 +225,6 @@ rule plottingReport:
 		knownGeneMaxDistance = "1000000" ,
 		isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]),
 		indivOutDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
-		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
 		traitTable = config["traitTable"],
 		outEps = "placeholder.eps"
 	output: 
@@ -257,7 +256,7 @@ rule getAggregateReport_input:
 rule getAggregatePR_input:
 	input:
 		allgenePredTable = expand("{outdir}{{pred}}/{trait}/GenePredictions.allCredibleSets.Dedup.tsv",outdir=config["outDir"], trait=all_traits),
-		knownGenes = expand("{outdir}GeneLists.{trait}.txt",outdir=config["traitDir"], trait=all_traits),
+		knownGenes = expand("{outdir}GeneLists.{trait}.txt",outdir=config["geneListDir"], trait=all_traits),
 	params:
 		codeDir = config["codeDir"],
 		traitTable = config["traitTable"]
@@ -276,7 +275,7 @@ rule getAggregatePR_input:
 			--knownGenes "{input.knownGenes}"
 			""")
 
-rule plottingAggregateReport:
+rule plottingAggregateTraitReport:
 	input:
 		allgenePredTable = expand("{outdir}{{pred}}/{{pred}}_aggregateGenePredictions.allCredibleSets.Dedup.tsv", outdir=config["outDir"]),
 		PRtable = expand("{outdir}{{pred}}/{{pred}}_aggregatePrecisionRecallTable.tsv", outdir=config["outDir"]),
@@ -292,12 +291,29 @@ rule plottingAggregateReport:
 		traitDir = config["traitDir"],
 		knownGeneMaxDistance = "1000000" ,
 		isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]),
-		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"]
 	output:
-		html = os.path.join(config["outDir"], "{pred}/GWAS_aggregate_report.html")
+		html = os.path.join(config["outDir"], "{pred}/GWAS_aggregateTrait_report.html")
 	message: "Compiling R Markdown report in html format"
 	script: os.path.join(config["codeDir"], "plottingAggregateTraits.Rmd")
 
+rule plottingAggregateReport:
+	input:
+		allgenePredTableFiles = expand("{outdir}{pred}/{pred}_aggregateGenePredictions.allCredibleSets.Dedup.tsv", pred=all_predictions, outdir=config["outDir"]),
+		enrichmentFiles = expand("{outdir}{pred}/{pred}_aggregateTraitEnrichment.tsv", outdir=config["outDir"], pred=all_predictions),
+		enrichedCellTypes = expand("{outdir}{pred}/{pred}_numEnrichedCellTypesPerTrait.tsv", outdir=config["outDir"], pred=all_predictions),
+		enrichVsPp_noncoding = expand("{outdir}{pred}/EnrichmentVsPosteriorProb.nonCoding.tsv", outdir=config["outDir"], pred=all_predictions),
+		geneLists = expand("{outdir}/GeneLists.aggregate.txt", outdir=config["resources"]) #{geneList}", outdir=config["geneListDir"], geneList=trait_config_file['knownGenes'])
+	params:
+		codeDir = config["codeDir"],
+                predictors = all_predictions,
+                outDir = config["outDir"],
+                predDir = config["predDir"],
+                traitDir = config["traitDir"],
+                knownGeneMaxDistance = "1000000" 
+	output:
+		html = os.path.join(config["outDir"], "GWAS_aggregatePredictions_report.html")
+	message: "Compiling R Markdown report in html format"
+	script: os.path.join(config["codeDir"], "plottingAggregatePredictions.Rmd")
 
 rule plotPropertyReport:
 	input:
@@ -307,7 +323,8 @@ rule plotPropertyReport:
 		numGenes = expand("{outdir}{pred}/{pred}.metrics.numGenes.tsv", outdir=config["outDir"], pred=all_predictions), 
 		numBiosamplesCounts = expand("{outdir}{pred}/{pred}.metrics.numBiosamplesCounts.tsv", outdir=config["outDir"], pred=all_predictions),
 		totalUniquebp = expand("{outdir}{pred}/{pred}.metrics.uniquebp.tsv", outdir=config["outDir"], pred=all_predictions),
-		numEGCounts = expand("{outdir}{pred}/{pred}.metrics.numEGCounts.tsv", outdir=config["outDir"], pred=all_predictions)
+		numEGCounts = expand("{outdir}{pred}/{pred}.metrics.numEGCounts.tsv", outdir=config["outDir"], pred=all_predictions),
+		EGDistFiles = expand("{outdir}/{pred}_distanceToTSS.tsv", outdir=config["resources"], pred=all_predictions)
 	params:
 		num_examples = "1000",
 		allpredictions = all_predictions

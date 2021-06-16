@@ -18,9 +18,7 @@ rule annotateVariants:
 		genePredTable = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"]),
 		genePredTableDedup = expand("{outdir}{{pred}}/{{trait}}/GenePredictions.allCredibleSets.Dedup.tsv", outdir=config["outDir"]),
 		allflat = expand("{outdir}{{pred}}/{{trait}}/data/all.flat.tsv", outdir=config["outDir"])
-	log: os.path.join(config["logDir"], "{trait}.{pred}.annotate.log")
 	params:
-		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred,"celltypeAnnotation"],
 		codeDir = config["codeDir"],
 		projectDir = config["projectDir"],
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
@@ -36,6 +34,7 @@ rule annotateVariants:
 		hasTargetGeneTSS = lambda wildcard: str(preds_config_file.loc[wildcard.pred,"hasTargetGeneTSS"]),
 		chr_sizes = config["chrSizes"],
 		isEnhancerBed = lambda wildcard: str(preds_config_file.loc[wildcard.pred, 'EnhancerBedFile'])
+	log: os.path.join(config["logDir"], "{trait}.{pred}.annotate.log")
 	message: "Annotating {wildcards.trait} variants with {wildcards.pred} predictions"
 	run:
 		shell(
@@ -62,7 +61,6 @@ rule annotateVariants:
                 	--codeDir {params.codeDir} \
                 	--variantScoreCol {params.varScoreCol} \
                 	--variantScoreThreshold {params.varScoreThreshold} \
-                	--cellTypeTable {params.cellTypeTable} \
                 	--genes {params.genes} \
                 	--genesUniq {params.genesUniq} \
 			--geneTSS {input.geneTSS} \

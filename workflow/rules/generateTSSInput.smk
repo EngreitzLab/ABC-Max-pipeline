@@ -1,6 +1,6 @@
 rule getGeneTSS:
         input:
-                geneList = lambda wildcard: config["predDir"]+str(preds_config_file.loc[wildcard.pred,"genes"])
+                geneList = lambda wildcard: config["dataDir"]+str(preds_config_file.loc[wildcard.pred,"genes"])
         output:
                 geneTSS = expand("{outdir}{{pred}}/geneTSS.500bp.bed", outdir=config["outDir"])
         params:
