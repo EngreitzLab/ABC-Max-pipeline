@@ -41,10 +41,11 @@ source(paste0(snakemake@params$codeDir, "CredibleSetTools.R"))
 # get input arguments 
 all_predictors = strsplit(snakemake@params$predictors, " ") %>% unlist()
 enrichmentTables = strsplit(snakemake@input$enrichmentFiles, " ") %>% unlist()
-#cellCategories <- read.delim(snakemake@params$cellTypeTable, header=T, sep="\t")
-numCellTypesDF <- read.delim(snakemake@input$enrichedCellTypes, header=T, sep="\t")
-enrichVsPp.noncoding <- read.delim(snakemake@input$enrichVsPp_noncoding, header=T, sep="\t")
-pred <- snakemake@wildcards$pred
+numCellTypesFiles = strsplit(snakemake@input$enrichedCellTypes, " ") %>% unlist()
+enrichVsPp.noncoding.file = strsplit(snakemake@input$enrichVsPp_noncoding, " ") %>% unlist()
+allgenePredTable = strsplit(snakemake@input$allgenePredTableFiles, " ") %>% unlist()
+#PRtableFiles = strsplit(snakemake@input$PRtableFiles, " ") %>% unlist()
+knownGenes = read.delim(snakemake@input$geneLists, sep="\t", header=TRUE, check.names=F, stringsAsFactors=F, row.names=NULL)
 ```
 ```{r plottingEnrichmentCode, echo=FALSE, error=FALSE, message=FALSE,  warnings=FALSE}
 ############ DESCRIPTION ###########
@@ -71,45 +72,65 @@ if (length(enrichmentTables) > 1){
 }
 
 # Set theme of plots
-mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1), axis.text=element_text(size=13))#, axis.text = element_text(size = 13), axis.title = element_text(size = 15))
+mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1), axis.text = element_text(size = 13), axis.title = element_text(size = 15))
 aggregateDF <- cellEnrichment
-ibdEnhancerList <- cellEnrichment[, c("CellType", "Disease", "enrichment", "enrichment.NoPromoters", "n.noPromoters.FractionOverlap", "n.FractionOverlap")]
-is_method <- ibdEnhancerList$Method == pred
-bdEnhancerList <- ibdEnhancerList[is_method,]
+ibdEnhancerList <- cellEnrichment[, c("CellType", "Disease", "enrichment", "enrichment.NoPromoters", "n.noPromoters.FractionOverlap", "n.FractionOverlap", "Method")]
+#is_method <- ibdEnhancerList$Method == pred
+#bdEnhancerList <- ibdEnhancerList[is_method,]
 diseases <- unique(ibdEnhancerList$Disease)
+#formatEnrichmentBarPlot <- function(p) p + geom_point() + mytheme() 
 formatEnrichmentBarPlot <- function(p) p + geom_boxplot(outlier.shape = NA) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_hue(l=50, c=90) + theme(plot.title = element_text(size=15), legend.position='none')
 
 ibdEnhancerList$Disease <- ordered(ibdEnhancerList$Disease, levels=unique(rev(ibdEnhancerList[order(ibdEnhancerList$enrichment.NoPromoters),"Disease"])))
-p1 <- ggplot(ibdEnhancerList, aes(x=Disease, y=enrichment.NoPromoters, fill=Disease)) + ylab(paste0("Enrichment\n( GWAS variants / all variants)")) + labs(title=paste0("Enhancers (excluding promoter regions) across traits")) + xlab("Trait") + ylim(0, max(ibdEnhancerList$enrichment.NoPromoters))
+p1 <- ggplot(ibdEnhancerList, aes(x=Disease, y=enrichment.NoPromoters, fill=Disease)) + ylab(paste0("Enrichment\n( GWAS variants / all variants)")) + labs(title=paste0("Enhancers (excluding promoter regions) across traits")) + xlab("Trait") + ylim(0, max(ibdEnhancerList$enrichment.NoPromoters)) + facet_wrap(~ Method, ncol=1)
 p1 <- p1 %>% formatEnrichmentBarPlot()
-# figure caption
-#ggplotly(p1)
 ```
 
 ```{r plottingEnrichmentCode_all, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
-p2 <- ggplot(ibdEnhancerList, aes(x=Disease, y=enrichment, fill=Disease)) + ylab(paste0("Enrichment\n( GWAS variants / all variants)")) + labs(title=paste0("Enhancers (including promoter regions)")) + xlab("Trait") + ylim(0, max(ibdEnhancerList$enrichment))
+p2 <- ggplot(ibdEnhancerList, aes(x=Disease, y=enrichment, fill=Disease)) + ylab(paste0("Enrichment\n( GWAS variants / all variants)")) + labs(title=paste0("Enhancers (including promoter regions)")) + xlab("Trait") + ylim(0, max(ibdEnhancerList$enrichment)) + facet_wrap(~ Method, ncol=1)
 p2 <- p2 %>% formatEnrichmentBarPlot()
 
 #ggplotly(p2)
 ```
 ```{r plottingFractionOverlap, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
 formatEnrichmentBarPlot <- function(p) p + geom_boxplot(outlier.shape = NA) + scale_y_continuous(limits = c(0, 0.20)) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=diseases) + scale_color_hue(l=50, c=90) + theme(legend.position='none') 
-#formatEnrichmentBarPlot <- function(p) p + geom_boxplot(outlier.shape = NA) + geom_jitter(position=position_jitter(0.2), size=3) + scale_y_continuous(limits = c(0, 0.20)) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=diseases) + scale_color_hue(l=50, c=90) + theme(legend.position='none') 
 ibdEnhancerList$Disease <- ordered(ibdEnhancerList$Disease, levels=unique(rev(ibdEnhancerList[order(ibdEnhancerList$enrichment.NoPromoters),"Disease"])))
-p3 <- ggplot(ibdEnhancerList, aes(x=Disease, y=n.noPromoters.FractionOverlap, fill=Disease)) + ylab(paste0("Fraction Overlap\n( GWAS variants / all variants)")) + ggtitle(paste0("Enhancers (excluding promoter regions)")) 
+p3 <- ggplot(ibdEnhancerList, aes(x=Disease, y=n.noPromoters.FractionOverlap, fill=Disease)) + ylab(paste0("Fraction Overlap\n( GWAS variants / all variants)")) + ggtitle(paste0("Enhancers (excluding promoter regions)")) + facet_wrap(~ Method, ncol=1) 
 p3 <- p3 %>% formatEnrichmentBarPlot()
 #ggplotly(p3)
 ```
 
 ```{r plottingFractionOverlap_all, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE, fig.width=6, fig.height=4}
-p4 <- ggplot(ibdEnhancerList, aes(x=Disease, y=n.FractionOverlap, fill = Disease)) + ylab(paste0("Fraction Overlap\n( GWAS variants / all variants)")) + ggtitle(paste0("Enhancers (including promoter regions)")) 
+p4 <- ggplot(ibdEnhancerList, aes(x=Disease, y=n.FractionOverlap, fill = Disease)) + ylab(paste0("Fraction Overlap\n( GWAS variants / all variants)")) + ggtitle(paste0("Enhancers (including promoter regions)")) + facet_wrap(~ Method, ncol=1) 
 p4 <- p4 %>% formatEnrichmentBarPlot()
 #ggplotly(p4)
 ```
 
 ```{r numEnrichedCellTypes, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
+numCellTypesDF <- read.delim(numCellTypesFiles[1], sep="\t", header=TRUE, check.names=F,stringsAsFactors=F, row.names=NULL)
+numCellTypesDF$Method <- all_predictors[1]
 
-numCellTypesPlot_noPromoters <- ggplot(numCellTypesDF, aes(x=Disease, y=n, fill=Disease)) + ylab(paste0("Number of Enriched CellTypes")) + ggtitle(paste0("Enhancers (including promoter regions)")) + mytheme + geom_dotplot(binaxis='y', stackdir='center') + scale_color_manual(values=diseases) + scale_color_hue(l=50, c=90) + theme(legend.position='none') + scale_y_continuous(breaks=seq(0,max(numCellTypesDF$n),10))
+numCellTypesDF <- transform(numCellTypesDF, n=n/max(numCellTypesDF$n))
+
+if (length(numCellTypesFiles) > 1){
+	for (i in 2:length(numCellTypesFiles)){
+		tryCatch(
+		{
+			temp = read.delim(file=numCellTypesFiles[i], sep='\t', header=TRUE, stringsAsFactors = FALSE)
+			temp$Method <- all_predictors[i]
+			temp <- transform(temp, n/max(temp$n))
+			numCellTypesDF = rbind(numCellTypesDF, temp)
+		},
+		error=function(cond) {
+			message(paste("File does not exist::", i))
+		},
+		finally={
+			message(paste("Processed:",i))
+		})
+	}
+}
+
+numCellTypesPlot_noPromoters <- ggplot(numCellTypesDF, aes(x=Disease, y=n, fill=Disease)) + ylab(paste0("Number of Enriched CellTypes / Total Number of CellTypes")) + ggtitle(paste0("Enhancers (excluding promoter regions)")) + mytheme + geom_point() + scale_color_manual(values=diseases) + scale_color_hue(l=50, c=90) + theme(legend.position='none') + scale_y_continuous(breaks=seq(0,max(numCellTypesDF$n),0.1)) + facet_wrap(~Method, ncol=1)
 numCellTypesPlot_noPromotersPlotly <- ggplotly(numCellTypesPlot_noPromoters)
 ```
 
@@ -124,6 +145,27 @@ cdf = ggplot(aggregateDF, aes(x=enrichment.NoPromoters, col=Method)) +
 ```
 
 ```{r plotFractionOverlapPosProb, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE, fig.width=6, fig.height=4}
+# Concatentate enrichVsPp.noncoding 
+enrichVsPp.noncoding <- read.delim(enrichVsPp.noncoding.file[1], sep="\t", header=TRUE, check.names=F,stringsAsFactors=F, row.names=NULL)
+enrichVsPp.noncoding$Method <- all_predictors[1]
+
+if (length(enrichVsPp.noncoding.file) > 1){
+	for (i in 2:length(enrichVsPp.noncoding.file)){
+		tryCatch(
+		{
+			temp = read.delim(file=enrichVsPp.noncoding.file[i], sep='\t', header=TRUE, stringsAsFactors = FALSE)
+			temp$Method <- all_predictors[i]
+			enrichVsPp.noncoding = rbind(enrichVsPp.noncoding, temp)
+		},
+		error=function(cond) {
+			message(paste("File does not exist::", i))
+		},
+		finally={
+			message(paste("Processed:",i))
+		})
+	}
+}
+
 ## Look at overlap of all variants with ABC enhancer as function of posterior prob (in any cell type\, not just enriched cell types)
 # 04122021 KSM: set this as an input instead of hardcoded
 bloodRelatedTraits <- c("Baso","Eosino","Hb","LOY","Lym","MCH","MCHC","MCV","Mono","Neutro","RBC","WBC")
@@ -131,7 +173,7 @@ bloodRelatedTraits <- c("Baso","Eosino","Hb","LOY","Lym","MCH","MCHC","MCV","Mon
 # set theme
 mytheme <- theme_classic() #+ theme(axis.text = element_text(size = 13), axis.title = element_text(size = 15))
 trait="IBD"
-p <- ggplot(subset(enrichVsPp.noncoding, nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100, group=Disease)) + geom_line(color='gray') + xlab("PIP (log10)") + ylab("% noncoding variants") + ylim(0,100) + mytheme
+p <- ggplot(subset(enrichVsPp.noncoding, nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100, group=Disease)) + geom_line(color='gray') + xlab("PIP (log10)") + ylab("% noncoding variants") + ylim(0,100) + mytheme + facet_wrap(~ Method, ncol=3)
 p <- p + geom_line(data=subset(enrichVsPp.noncoding,Disease%in%bloodRelatedTraits & nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100), color='red')
 p <- p + geom_line(data=subset(enrichVsPp.noncoding,Disease=="All" & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100), color='black')
 p <- p + geom_line(data=subset(enrichVsPp.noncoding,Disease==trait & nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100), color='blue')
@@ -139,28 +181,44 @@ p <- p + geom_hline(yintercept=7.5, linetype='dashed', color='black')
 p <- p 
 ```
 ```{r plotAggregatePR , echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.width=6, fig.height=4}
-mytheme <- theme_classic() #+ theme(
-                           #       axis.text = element_text(size = 13),
-                           #       axis.title = element_text(size = 15))
+mytheme <- theme_classic() 
 
-getPRPlot <- function(pr, baseline=NULL, xlab="Recall") {
-	pr <- pr %>% group_by(Method) %>% mutate(n=n())
-	#pr <- pr[order(pr$Method), ]
-	pr.points <- pr %>% filter(n==1)
-    	pr.lines <- pr %>% filter(n>1)
-	p <- ggplot(pr.points, aes(x=Recall, y=Precision, color=Method))
-	if (!is.null(baseline)) p <- p + geom_hline(yintercept=baseline, color='gray', linetype='dashed')
-	p <- p + geom_point(size=3)
-	#p <- p + geom_line(data=pr.lines)
-	p <- p + mytheme + coord_fixed() + xlim(0,1) + ylim(0,1) + xlab(xlab) + ylab("Precision")
-	return(p)
+gp.all <- read.delim(allgenePredTable[1], sep="\t", header=TRUE, check.names=F, stringsAsFactors=F, row.names=NULL)
+gp.all$Method <- all_predictors[1]
+mergecols <- colnames(gp.all[, 1:10])
+
+if (length(allgenePredTable) >1){
+	for (i in 2:length(allgenePredTable)){
+		tryCatch(
+		{
+			# PLOT Aggregate Precision-Recall Curves
+			temp <- read.delim(allgenePredTable[i], sep="\t", header=T, check.names=F, stringsAsFactors=F)
+			temp$Method <- all_predictors[1]
+			gp.all = merge(gp.all, temp, by=mergecols)
+		},
+		error=function(cond) {
+			message(paste("File does not exist::", i))
+		},
+		finally={
+			message(paste("Processed:",i))
+		})
+	}
 }
 
-# PLOT Aggregate Precision-Recall Curves
-#names = strsplit(snakemake@input$allgenePredTable, " ") %>% unlist()
-gp.all <- read.delim(snakemake@input$allgenePredTable, sep="\t", header=T, check.names=F, stringsAsFactors=F)
-aggPR <- read.delim(snakemake@input$PRtable, sep="\t", header=T, check.names=F, stringsAsFactors=F)
-nRecall <- aggPR$nRecall
+# get total number of knownGenes 
+#knownGenes <- read.delim(knownGenesFiles[1], sep="\t", header=TRUE, check.names=F, stringsAsFactors=F, comment.char='#') 
+#colnames(knownGenes) <- "GeneList"
+#for (i in 2:length(knownGenesFiles)){
+#	temp <- read.delim(knownGenesFiles[i], sep="\t", header=TRUE, check.names=F, stringsAsFactors=F, comment.char='#') 
+#	colnames(temp) <- "GeneList"
+#	knownGenes <- rbind(knownGenes, temp)	
+#}
+#knownGenes <- knownGenes %>% distinct()
+predictors <- colnames(gp.all)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp.all))]
+for (gl in colnames(knownGenes))
+	gp.plot <- doOneKnownGeneList(gl, gp.all, predictors, knownGenes, maxKnownGenes=length(knownGenes))
+	aggPR <- getPRTable(gp.plot, predictors)
+	nRecall <- aggPR$nRecall
 aggCurve <- getPRPlot(aggPR, baseline=getPrecisionBaseline(gp.all), xlab=paste0("Recall (n=",nRecall,")"))
 dev.off()
 ```
@@ -177,9 +235,11 @@ numCellTypesPlot_noPromoters_title <- numCellTypesPlot_noPromoters + ggtitle('C'
 aggCurve_title <- aggCurve + ggtitle('D') 
 cdfAgg <- cdf + ggtitle('E') 
 
-patchwork <- p1_title / p3_title
-patchwork
-patchwork1 <- numCellTypesPlot_noPromoters_title / (aggCurve_title + cdfAgg)
+p1_title
+p3_title
+#patchwork
+numCellTypesPlot_noPromoters_title
+patchwork1 <- aggCurve_title + cdfAgg
 patchwork1
 ```
 
@@ -195,7 +255,7 @@ The first question we ask is : <br>
 These barplots calculates the enrichment for fine-mapped variants (PIP >= 10%) in `r snakemake@wildcards$pred` enhancers (left) and enhancers without promoter regions (promoter regions as defined by RefSeq) (right) across all biosamples. Variants were filtered to only include non-coding distal elements.  
 <br>
 
-```{r enrichmentplot1, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.width=14, fig.height=6}
+```{r enrichmentplot1, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.width=14, fig.height=10}
 
 ptly1 <- ggplotly(p1)
 ptly2 <- ggplotly(p2)
@@ -212,24 +272,26 @@ htmltools::tagList(DT::datatable(matrix()))
 ```
 
 ```{r dataTables, echo=FALSE, results='asis'}
-pred = snakemake@wildcards$pred
-# get index
-index = which(all_predictors==pred)[[1]]
-cat("  \n###",  all_predictors[index], "  \n")
-table.current = ibdEnhancerList
-cat("  \n")
-table.current <- table.current %>% dplyr::select(CellType, Disease, enrichment, enrichment.NoPromoters, n.FractionOverlap, n.noPromoters.FractionOverlap)
-cat(knitr::knit_print(datatable(table.current, rownames = FALSE, filter="top", 
-			options=list(pageLength = 5, scrollX=T))))
-cat("  \n")
-cat("  \n")
-#}
+for (i in 1:length(all_predictors)){
+	cat("  \n###",  all_predictors[i], "  \n")
+	table.current = subset(cellEnrichment, Method== paste0(all_predictors[i], ""))
+	cat("  \n")
+	table.current <- table.current %>% dplyr::select(CellType, Disease, enrichment, enrichment.NoPromoters, n.FractionOverlap, n.noPromoters.FractionOverlap)
+	cat(knitr::knit_print(reactable(table.current, striped=TRUE, searchable=TRUE, filterable=TRUE,
+					defaultPageSize=5, resizable=TRUE,
+					columns = list(enrichment = colDef(name = "GWAS enrichment (including promoter regions", format=colFormat(digits=2)), 
+					enrichment.NoPromoters = colDef(name = "GWAS enrichment (excluding promoter regions)", format=colFormat(digits=2)),
+					n.FractionOverlap = colDef(name = "# variants in Enhancers"),
+					n.noPromoters.FractionOverlap = colDef(name = "# variants in Enhancers (excluding promoter regions)")))))
+	cat("  \n")
+	cat("  \n")
+}
 ```
 
 # To what extent do GWAS variants overlap predicted enhancers?
 ## Variant overlap of GWAS variants for enhancers (including promoter regions) (left) and enhancers (excluding promoter regions) (right)
-We plot the fraction overlap of variants (PIP >= 10%) that overlap `r snakemake@wildcards$pred` enhancers with and without promoter regions (promoter regions as defined by RefSeq) across all biosamples.
-```{r enrichmentplot3, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.width=14, fig.height=6}
+We plot the fraction overlap of variants (PIP >= 10%) that overlap enhancers with and without promoter regions (promoter regions as defined by RefSeq) across all biosamples.
+```{r enrichmentplot3, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.width=14, fig.height=10}
 ptly3 <- ggplotly(p3)
 ptly4 <- ggplotly(p4)
 #subplot(ptly3, ptly4, nrows=2, titleX = TRUE, titleY = TRUE)
@@ -239,16 +301,16 @@ cap <- paste0("Fig3. Fraction overlap of fine-mapped variants (PIP >= 10%) in \n
 ```
 
 # How many enriched celltypes are called across all traits? 
-```{r plotEnriched, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.height=6, fig.width=10}
+```{r plotEnriched, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.height=14, fig.width=10}
 numCellTypesPlot_noPromoters 
 cap <- paste0("Fig 4. Number of enriched celltypes (p < 0.05) when calculating for enrichment of GWAS variants / all variants across all traits.")
 ```
 
-# How does the fraction of noncoding variants that overlap a given `r snakemake@wildcards$pred` enhancer in any biosample change given the PIP threshold?
+# How does the fraction of noncoding variants that overlap a given enhancer in any biosample change given the PIP threshold?
 Variants were filtered to include only distal non-coding. Blue represents IBD. Red represents 12 other blood traits. Black represents the average across all traits and Gray represents the remaining 57 other traits. 
-```{r enrichmentplot5, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.height=4, fig.width=6}
+```{r enrichmentplot5, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.cap=cap, fig.height=4, fig.width=10}
 ggplotly(p)
-cap <- paste0("Fig5. Fraction of noncoding variants above a given PIP threshold that overlap an ", pred, " enhancer in any biosample. Black line, weighted average across traits. Traces are shown for PIP thresholds above which there are at least five variants. Dashed line, fraction of all common noncoding variants that overlap ", pred, " enhancers.")
+cap <- paste0("Fig5. Fraction of noncoding variants above a given PIP threshold that overlap an enhancer in any biosample. Black line, weighted average across traits. Traces are shown for PIP thresholds above which there are at least five variants. Dashed line, fraction of all common noncoding variants that overlap enhancers.")
 ```
 
 # How well do predictions connect noncoding credible sets to known disease genes?

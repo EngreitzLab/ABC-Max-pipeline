@@ -67,7 +67,6 @@ def grabMetrics(args):
     concatNumBiosamples = []
     numEGenes = []
     numEGVals = []
-    #if not os.path.isfile(args.numBiosamplesCounts):
     for index, row in data.iterrows():
         genes = str(row['Genes']).split(",")
         if len(genes) > 0:

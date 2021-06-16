@@ -35,7 +35,7 @@ library(patchwork)
 library(ggrepel)
 library(ggpubr)
 # set global chunk options
-knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE, results=FALSE)
+knitr::opts_chunk$set(echo = FALSE, error = FALSE, message=FALSE, warning=FALSE)
 
 source(paste0(snakemake@params$codeDir, "JuicerUtilities.R"))
 source(paste0(snakemake@params$codeDir, "CredibleSetTools.R"))
@@ -113,17 +113,16 @@ p4_label <- p4
 
 gp <- read.delim(snakemake@input$genePredTable, header=T, check.names=F, stringsAsFactors=F, comment.char='#')
 predictors <- colnames(gp)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp))]
-
+gp$Method <- pred
 mytheme <- theme_classic() 
 
 ####################################################################
 ## PLOT:
 for (gl in colnames(knownGenes))
-	gp.plot <- doOneKnownGeneList(gl, gp, predictors)
+	gp.plot <- doOneKnownGeneList(gl, gp, predictors, knownGenes)
 	nRecall <- sum(gp.plot$knownGene)
 	pr <- getPRTable(gp.plot, predictors)
 	singlePR  <- getPRPlot(pr, baseline=getPrecisionBaseline(gp), xlab=paste0("Recall (n=",nRecall,")")) 
-dev.off()
 
 ```
 
@@ -131,20 +130,20 @@ dev.off()
 # PLOT Aggregate Precision-Recall Curves
 names = strsplit(snakemake@input$allgenePredTable, " ") %>% unlist()
 gp.all <- read.delim(names[1], header=T, check.names=F, stringsAsFactors=F, comment.char='#')
+gp.all$Method <- all_predictors[1]
 mergecols <- colnames(gp.all[, 1:10])
 if (length(names) > 1){
 	for (i in 2:length(names)){
 	       temp = read.delim(file=names[i], header=T, check.names=F, stringsAsFactors=F, comment.char='#')
+	       temp$Method = all_predictors[i]
 	       gp.all = merge(gp.all, temp, by=mergecols)
 	}
 }
-
 predictors <- colnames(gp.all)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp.all))]
 for (gl in colnames(knownGenes))
-	gp.plot <- doOneKnownGeneList(gl, gp.all, predictors, maxKnownGenes=length(knownGenes))
+	gp.plot <- doOneKnownGeneList(gl, gp.all, predictors, knownGenes, maxKnownGenes=length(knownGenes))
 	aggPR <- getPRTable(gp.plot, predictors)
 aggCurve <- getPRPlot(aggPR, baseline=getPrecisionBaseline(gp.all), xlab=paste0("Recall (n=",nRecall,")"))
-dev.off()
 
 ```
 
@@ -202,19 +201,18 @@ The following report is done for **`r snakemake@wildcards$trait`** traits. <br>
 
 p1_title <- p1 
 p3_title <- p3 
-singlePR_title <- singlePR + ggtitle('C') 
-aggCurve_title <- aggCurve + ggtitle('D') 
+singlePR_title <- singlePR 
+aggCurve_title <- aggCurve 
 #fig2_title <- fig2 + ggtitle('E') 
 #fig2a_title <- fig2a + ggtitle('F') 
 
 ggarrange(p1_title, p3_title, labels=c("A", "B"), nrow=1)
 ```
-```{r summary1, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=8} 
-patchwork <- (singlePR_title + aggCurve_title)
-patchwork
+```{r summary1, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
+ggarrange(singlePR_title, aggCurve_title, labels=c("C", "D"), nrow=1)
 ```
 <br>
-**Fig1. `r snakemake@wildcards$pred` maps connecting fine-mapped variants to enhancer, genes and celltypes. a**, Enrichment of fine-mapped `r snakemake@wildcards$trait` variants (PIP>10%) in `r snakemake@wildcards$pred` enhancers. **b**, Fraction of fine-mapped `r snakemake@wildcards$trait` variants (PIP>10%) overlapping `r snakemake@wildcards$pred` enhancers. **c**,  Fraction of noncoding variants above a given PIP threshold that overlap an `r snakemake@wildcards$pred` enhancer in any biosample. Black line, weighted average across all traits. Traces are shown for PIP thresholds above which there are at least five variants. Dashed line, fraction of all common noncoding variants that overlap  `r snakemake@wildcards$pred` enhancers." **d**,  Precision–recall plot of connections between noncoding `r snakemake@wildcards$trait`  credible sets and known `r snakemake@wildcards$trait`-associated genes.
+**Fig1. `r snakemake@wildcards$pred` maps connecting fine-mapped variants to enhancer, genes and celltypes. a**, Enrichment of fine-mapped `r snakemake@wildcards$trait` variants (PIP>10%) in `r snakemake@wildcards$pred` enhancers. **b**, Fraction of fine-mapped `r snakemake@wildcards$trait` variants (PIP>10%) overlapping `r snakemake@wildcards$pred` enhancers. **c**, Precision–recall plot of connections between noncoding `r snakemake@wildcards$trait`  credible sets and known `r snakemake@wildcards$trait`-associated genes. **d**,  Precision–recall plot of connections between noncoding `r snakemake@wildcards$trait`  credible sets and known `r snakemake@wildcards$trait`-associated genes across different prediction methods. 
 <br>
 
 # To what extent are `r snakemake@wildcards$trait` GWAS variants enriched in predicted enhancers?
@@ -233,11 +231,10 @@ cap <- paste0("Fig2. Enrichment of fine-mapped ",trait," variants (PIP >= 10%) i
 ## Enrichment tables {.tabset}
 Tables with values used to derive enrichment values and # fraction overlap for enhancers (including promoter regions) and enhancers (excluding promoter regions). 
 ```{r doSomething, include=FALSE}
-htmltools::tagList(DT::datatable(matrix()))
+htmltools::tagList(reactable(matrix()))
 ```
 
-```{r dataTables, echo=FALSE, results='asis'}
-
+```{r dataTables, echo = FALSE, results='asis'}
 # get index for current predictor to show the right data
 index = which(all_predictors==pred)[[1]]
 cat("  \n###",  all_predictors[index], "  \n")
@@ -246,8 +243,8 @@ cat("  \n")
 table.current <- transform(table.current, n.FractionOverlap = n / total)
 table.current <- transform(table.current, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
 table.current <- table.current %>% dplyr::select(CellType, enrichment, enrichment.NoPromoters, n.FractionOverlap, n.noPromoters.FractionOverlap)
-cat(knitr::knit_print(datatable(table.current, rownames = FALSE, filter="top", 
-			options=list(pageLength = 5, scrollX=T))))
+cat(knitr::knit_print(reactable(table.current, striped=TRUE, searchable=TRUE, filterable=TRUE, 
+			defaultPageSize=5, resizable=TRUE)))
 cat("  \n")
 cat("  \n")
 ```
