@@ -5,7 +5,7 @@ This repository seeks to serve as one out of three parts of a Comparison Pipelin
 2. Fine-mapping in UK Biobank (Hilary Finucane et al): https://www.finucanelab.org/data
 
 ## Getting Started
-1. Activate conda environment via : `conda create env -f abc-max.yml`
+1. Activate conda environment via : `conda env create -f workflow/envs/abc-max.yml`
 
 
 Example command:
