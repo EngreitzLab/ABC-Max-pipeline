@@ -50,7 +50,7 @@ option.list <- list(
   make_option("--genePredMaxDistance", type="numeric", default=1000000, help="Gene prediction table: Include genes within this distance"),
   make_option("--biosampleEnrichThreshold", type="numeric", default=0.001, help="Gene prediction and enrichment tables: Bonferroni-adjusted p-value to call biosample as significantly enriched for overlapping variants (set to 1 to include all biosamples in gene prediction table)"),
 
-  make_option("--cellTypeTable", type="character", help="Table with annotations of cell types, with columns 'CellType', 'Categorical.*', 'Binary.*' for plotting enrichments"),
+  #make_option("--cellTypeTable", type="character", help="Table with annotations of cell types, with columns 'CellType', 'Categorical.*', 'Binary.*' for plotting enrichments"),
   #make_option("--relevantCellTypes", type="character", default="Binary.IBDRelevant", help="Column in cell type table containing mask for cell types that are 'relevant' to the trait"),
   #make_option("--tissueCategory", type="character", default="Categorical.IBDTissueAnnotations", help="Column in the cell type table containing tissue type categories"),
   #make_option("--predColForStats", type="character", default="ConnectionStrengthRank.Binary.IBDRelevant", help="Prediction to use for making stats"),
@@ -62,9 +62,7 @@ option.list <- list(
   make_option("--removePromoterVariants", type="logical", default=FALSE, help="Remove credible sets with promoter variants from the filter.cs list"),
   make_option("--removeCodingVariants", type="logical", default=TRUE, help="Remove credible sets with coding variants from the filter.cs list"),
   make_option("--removeSpliceSiteVariants", type="logical", default=TRUE, help="Remove credible sets with splice site variants from the filter.cs list"),
-  #make_option("--housekeepingList", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/Human.HKGeneList.txt", help="List of housekeeping / ubiquitously expressed genes; will ignore ABC connections to these genes"),
-  #make_option("--predColMap", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/ABCColMap.txt", help="Needed for ABC predictions from new codebase 191221; pass 'NULL' to ignore"),
-  make_option("--codeDir", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/Utilities/", help="Directory to code base")
+  make_option("--codeDir", type="character", help="Directory to code base")
 )
 
 opt <- parse_args(OptionParser(option_list=option.list))
@@ -111,10 +109,10 @@ variant.list <- read.delim(opt$variants, check.names=F)
 # Finding a vector of relevant cell types
 # TODO: Requirements for this file? CellType | Categorical.IBDTissueAnnotations2
 # TODO: only use this celltype table is using the ABC predictions. Else?
-if (opt$cellTypeTable != "nan") { 
-  cell.type.annot <- read.delim(opt$cellTypeTable, check.names=F)
+#if (opt$cellTypeTable != "nan") { 
+#  cell.type.annot <- read.delim(opt$cellTypeTable, check.names=F)
 #  cell.type.list <- cell.type.annot$CellType
-}
+#}
 
 if (opt$hasCellType) {
   ## JME: This is not the best way to get this list of cell types
@@ -132,6 +130,10 @@ if (opt$hasCellType) {
 all.cs <- read.delim(opt$credibleSets, check.names=F, stringsAsFactors=F)
 all.cs$CredibleSet <- factor(all.cs$CredibleSet)
 all.cs$MaxVariantScore <- sapply(all.cs$CredibleSet, function(cs) max(subset(variant.list, CredibleSet == cs)[,opt$variantScoreCol]))
+
+all.cs$AnyCoding <- as.logical(all.cs$AnyCoding)
+all.cs$AnySpliceSite <- as.logical(all.cs$AnySpliceSite)
+all.cs$AnyPromoter <- as.logical(all.cs$AnyPromoter)
 
 # Optionally removing all coding, splice site, and promoter variants. These sets
 # are used in the enrichment analysis.
@@ -154,7 +156,7 @@ if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
 # the required column names
 overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, isTargetGeneTSS=opt$hasTargetGeneTSS)
 write.table(overlap, file=paste0(opt$outbase, "data/overlap.full.tsv"))
-overlap <- filterVariantOverlap(overlap, opt$predScoreCol, opt$minPredScore, opt$minPredScorePromoters)
+overlap <- filterVariantOverlap(overlap, opt$predScoreCol, opt$minPredScore, opt$minPredScorePromoters, opt$hasTargetGeneTSS)
 write.table(overlap, file=paste0(opt$outbase, "data/overlap.tsv"))
 
 # Annotating overlaps
@@ -229,27 +231,13 @@ bgOverlap_noPromoter <- read.delim(opt$bgOverlap_noPromoter, check.names=F, head
 # get filter.flat with no Promoters
 noPromoters = paste0(opt$outbase, "data/filter.flat.noPromoters.tsv")
 getNoPromoterPredictions(filter.flat.file, noPromoters, genes.tss.file)
-variant.file.noPromoter <- read.table(noPromoters, header=T)
+variant.file.noPromoter <- read.table(noPromoters, header=T,fill = TRUE)
 variant.by.cells.noPromoter <- getVariantByCellsTable(variant.file.noPromoter, isCellType=opt$hasCellType, isEnhancerBed=opt$isEnhancerBed)
 
 # variant.list.filter with no Promoters
 variant.list.noPromoter.file=paste0(opt$outbase, "data/variant.filter.noPromoters.tsv")
 getNoPromoterPredictions(variant.list.filter.file, variant.list.noPromoter.file, genes.tss.file)
-variant.list.noPromoters <- read.table(variant.list.noPromoter.file, header=T)
-
-# get compute celltype enrichment variables 
-#backgroundCounts <- getComputeCellTypeEnrichmentVariables(opt$backgroundVariants, opt$bgOverlap, isCellType=opt$hasCellType)
-#backgroundCounts_noPromoter <- getComputeCellTypeEnrichmentVariables(opt$backgroundVariants_noPromoter, opt$bgOverlap_noPromoter, isCellType=opt$hasCellType)
-#bgVars.count <- backgroundCounts[0]
-#bgOverlap.count <- backgroundCounts[1]
-#bgVars.count.noPromoter <- backgroundCounts_noPromoter[0]
-#bgOverlap.variant.count.noPromoter <- backgroundCounts_noPromoter[1]
-#print(bgVars.count)
-#print(bgOverlap.count)
-#print(bgVars.count.noPromoter)
-#print(bgOverlap.variant.count.noPromoter)
-#write.table(backgroundCounts, file="bgVars.count")
-#write.table(backgroundCounts_noPromoter, file="bgOverlap.count")
+variant.list.noPromoters <- read.table(variant.list.noPromoter.file, header=T, fill = TRUE)
 
 # With promoters
 enrich <- computeCellTypeEnrichment(variant.by.cells,
@@ -264,8 +252,6 @@ enrich <- computeCellTypeEnrichment(variant.by.cells,
                                     enrichment.threshold=opt$biosampleEnrichThreshold)
 
 
-## TODO: This logic for doing enrichment without promoters needs to be reworked
-## KSM: reworked to run on all predictions 
 # Without promoters
 enrich.nopromoter <- computeCellTypeEnrichment(variant.by.cells.noPromoter,
                                                variant.list.noPromoters,
@@ -298,7 +284,6 @@ if (!opt$isEnhancerBed){
 	  genes, 
 	  genes.uniq, 
 	  enriched.cell.types, 
-	  cell.type.annot, 
 	  score.col=opt$predScoreCol, 
 	  score.min=opt$minPredScore,
 	  var.score.col=opt$variantScoreCol, 
@@ -316,7 +301,6 @@ if (!opt$isEnhancerBed){
           genes,
           genes.uniq,
           enriched.cell.types,
-          cell.type.annot,
           score.col=opt$predScoreCol,
           score.min=opt$minPredScore,
           var.score.col=opt$variantScoreCol,

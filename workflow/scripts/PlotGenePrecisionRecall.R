@@ -71,49 +71,15 @@ mytheme <- theme_classic() + theme(
   axis.text = element_text(size = 13), 
   axis.title = element_text(size = 15))
 
-getPrecisionBaseline <- function(gp) mean(1 / unique(gp[,c("CredibleSet","CredibleSet.nNearbyGenes")])$TotalNearbyGenes)
-
-getPRTable <- function(gp, pred.cols) {    
-    pr <- do.call(rbind, c(
-    with(gp, list(
-      getPrecisionRecall(DistanceRank == 1, knownGene, Method="Closest Gene"),
-      getPrecisionRecall(DistanceToTSSRank == 1, knownGene, Method="Closest TSS"))),
-    lapply(pred.cols, function(col) getPrecisionRecall(gp[,col], gp$knownGene, Method=gsub("^Gene","",col)))
-  ))
-  write.table(pr, file="pr.tsv")
-  return(pr)
-}
-
-getPRPlot <- function(pr, baseline=NULL, xlab="Recall") {
-  pr <- pr %>% group_by(Method) %>% mutate(n=n())
-  pr.points <- pr %>% filter(n==1)
-  pr.lines <- pr %>% filter(n>1)
-  p <- ggplot(pr.points, aes(x=Recall, y=Precision, color=Method)) 
-  if (!is.null(baseline)) p <- p + geom_hline(yintercept=baseline, color='gray', linetype='dashed') 
-  p <- p + geom_point(size=3)
-  p <- p + geom_line(data=pr.lines)
-  p <- p + mytheme + coord_fixed() + xlim(0,1) + ylim(0,1) + xlab(xlab) + ylab("Precision")
-  return(p)
-}
-
-doOneKnownGeneList <- function(gene.list.name, gp, predictors, maxKnownGenes=1) {
-  ## Current logic: Filter the gene prediction table to those credible sets with exactly one known gene nearby
-  gp.plot <- gp %>% filter(DistanceToTSS <= opt$knownGeneMaxDistance) %>%
-        mutate(knownGene=TargetGene %in% knownGenes[[gene.list.name]]) %>%
-        group_by(CredibleSet) %>% mutate(nKnownGenes=sum(knownGene)) %>% ungroup() %>%
-        filter(nKnownGenes > 0 & nKnownGenes <= maxKnownGenes & CredibleSet.NoncodingWithSigVariant) %>% as.data.frame()
-  pr <- getPRTable(gp.plot, predictors)
-  p <- getPRPlot(pr, baseline=getPrecisionBaseline(gp), xlab=paste0("Recall (n=",maxKnownGenes,")"))
-  print(p)
-}
-
-
 ####################################################################
 ## PLOT:
 
 pdf(file=opt$outPdf, width=6, height=4, onefile=T)
 for (gl in colnames(knownGenes))
-  doOneKnownGeneList(gl, gp, predictors, maxKnownGenes=length(knownGenes))
+  gp.plot <- doOneKnownGeneList(gl, gp, predictors, maxKnownGenes=length(knownGenes))
+  nRecall <- sum(gp.plot$knownGene)
+  pr <- getPRTable(gp.plot, predictors)
+  singlePR  <- getPRPlot(pr, baseline=getPrecisionBaseline(gp), xlab=paste0("Recall (n=",nRecall,")"))
 dev.off()
 
 

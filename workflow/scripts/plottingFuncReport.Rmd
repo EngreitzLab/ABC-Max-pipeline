@@ -143,8 +143,11 @@ predictors <- colnames(gp.all)[greplany(c("GeneScore.","GenePrediction.","GenePr
 for (gl in colnames(knownGenes))
 	gp.plot <- doOneKnownGeneList(gl, gp.all, predictors, knownGenes, maxKnownGenes=length(knownGenes))
 	aggPR <- getPRTable(gp.plot, predictors)
-aggCurve <- getPRPlot(aggPR, baseline=getPrecisionBaseline(gp.all), xlab=paste0("Recall (n=",nRecall,")"))
 
+pdf(file="pr.curve.pdf", width=5, height=4)
+aggCurve <- getPRPlot(aggPR, baseline=getPrecisionBaseline(gp.all), xlab=paste0("Recall (n=",nRecall,")"))
+print(aggCurve)
+dev.off()
 ```
 
 ```{r plotAggregatecdf, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}

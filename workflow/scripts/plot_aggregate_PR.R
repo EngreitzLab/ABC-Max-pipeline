@@ -7,17 +7,6 @@ suppressPackageStartupMessages({
 	library(optparse)
 	library(DT)
 })
-# import functions from R script
-getPrecisionBaseline <- function(gp) mean(1 / unique(gp[,c("CredibleSet","CredibleSet.nNearbyGenes")])$TotalNearbyGenes)
-
-doOneKnownGeneList <- function(gene.list.name, gp, predictors, maxKnownGenes=1, knownGeneMaxDistance=1000000) {
-	## Current logic: Filter the gene prediction table to those credible sets with exactly one known gene nearby
-	gp.plot <- gp %>% filter(DistanceToTSS <= knownGeneMaxDistance) %>%
-		mutate(knownGene=TargetGene %in% subsetGeneList[[gene.list.name]]) %>%
-		group_by(CredibleSet) %>% mutate(nKnownGenes=sum(knownGene)) %>% ungroup() %>%
-		filter(nKnownGenes > 0 & nKnownGenes <= maxKnownGenes & CredibleSet.NoncodingWithSigVariant) %>% as.data.frame()
-	return(gp.plot)
-}
 
 main <- function(){
 
@@ -80,7 +69,7 @@ main <- function(){
 	predictors <- colnames(gp.all)[greplany(c("GeneScore.","GenePrediction.","GenePredictionMax."), colnames(gp.all))]
 	subsetGeneList <- subsetGeneList %>% distinct(GeneList)
 	for (gl in colnames(subsetGeneList)){
-		gp.plot <- doOneKnownGeneList(gl, gp.all, predictors, trait_params, subsetGeneList)
+		gp.plot <- doOneKnownGeneList(gl, gp.all, predictors, subsetGeneList)
 		nRecall <- sum(gp.plot$knownGene)
 		aggPR <- getPRTable(gp.plot, predictors)
 	}

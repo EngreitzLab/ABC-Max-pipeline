@@ -89,7 +89,9 @@ p1 <- p1 %>% formatEnrichmentBarPlot()
 ```{r plottingEnrichmentCode_all, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
 p2 <- ggplot(ibdEnhancerList, aes(x=Disease, y=enrichment, fill=Disease)) + ylab(paste0("Enrichment\n( GWAS variants / all variants)")) + labs(title=paste0("Enhancers (including promoter regions)")) + xlab("Trait") + ylim(0, max(ibdEnhancerList$enrichment)) + facet_wrap(~ Method, ncol=1)
 p2 <- p2 %>% formatEnrichmentBarPlot()
-
+pdf(file=
+    opt$outPdf, width=5, height=4)
+print(p1)
 #ggplotly(p2)
 ```
 ```{r plottingFractionOverlap, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}

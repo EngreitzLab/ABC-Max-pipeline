@@ -20,7 +20,7 @@ loadVariantOverlap <- function(
   genes, 
   variant.names=NULL, 
   overwriteTSS=FALSE, 
-  isTargetGeneTSS=TRUE) {
+  isTargetGeneTSS=FALSE) {
 
   ## Loads overlap file, and filters to variants in variant.names
   x <- read.delim(gzfile(overlap.file), check.names=F)
@@ -66,9 +66,9 @@ getCodingGenes <- function(genes=NULL, genes.uniq=NULL) {
 }
 
 
-filterVariantOverlap <- function(overlap, predCol, cutoff, tss.cutoff, ignore.list=c()) {
+filterVariantOverlap <- function(overlap, predCol, cutoff, tss.cutoff, hasTargetGeneTSS, ignore.list=c()) {
   ## Implements a different cutoff for distal enhancers versus distal promoters
-  if (!is.na(cutoff) & ("class" %in% colnames(overlap)))
+  if (!is.na(cutoff) & ("class" %in% colnames(overlap)) & (hasTargetGeneTSS))
     overlap <- subset(overlap, ((class != "tss" & class != "promoter") | isOwnTSS) | (get(predCol) >= tss.cutoff))
   if (!is.na(tss.cutoff) & ("class" %in% colnames(overlap)))
     overlap <- subset(overlap, ((class == "tss" | class == "promoter")) | (get(predCol) >= cutoff))
@@ -283,7 +283,6 @@ getGenePrioritizationTable <- function(
   genes, 
   genes.uniq, 
   cell.types, 
-  cell.type.annot, 
   score.col="ABC.Score",
   score.min=0.015,
   var.score.col="PosteriorProb",
@@ -301,7 +300,6 @@ getGenePrioritizationTable <- function(
         genes, 
         genes.uniq, 
         cell.types, 
-        cell.type.annot, 
         score.col,
         score.min,
         var.score.col,
@@ -353,7 +351,6 @@ getGenePrioritizationTableForCredibleSet <- function(
   genes, 
   genes.uniq, 
   cell.types, 
-  cell.type.annot, 
   score.col,
   score.min,
   var.score.col,
@@ -730,39 +727,54 @@ getAllVariantEnrichment <- function(ppBreaks, all.flat.full=all.flat.full, all.f
 getPrecisionBaseline <- function(gp) mean(1 / unique(gp[,c("CredibleSet","CredibleSet.nNearbyGenes")])$TotalNearbyGenes)
 
 getPRTable <- function(gp, pred.cols) {
-
-	    pr <- do.call(rbind, c(
-				       with(gp, list(
-						           getPrecisionRecall(DistanceRank == 1, knownGene, Method="Closest Gene"),
-							         getPrecisionRecall(DistanceToTSSRank == 1, knownGene, Method="Closest TSS"))),
-				       lapply(pred.cols, function(col) getPrecisionRecall(gp[,col], gp$knownGene, Method=gsub("^Gene","",col)))
-				         ))
-  return(pr)
+	pr <- do.call(rbind, c(
+		with(gp, list(
+			      getPrecisionRecall(DistanceRank == 1, knownGene, Method="Closest Gene"),
+			      getPrecisionRecall(DistanceToTSSRank == 1, knownGene, Method="Closest TSS"))),
+			       lapply(pred.cols, function(col) getPrecisionRecall(gp[,col], gp$knownGene, Method=gsub("^Gene","",col)))
+	))
+	return(pr)
 }
 
 getPRPlot <- function(pr, baseline=NULL, xlab="Recall") {
-	  pr <- pr %>% group_by(Method) %>% mutate(n=n())
-  pr.points <- pr %>% filter(n==1)
-    pr.lines <- pr %>% filter(n>1)
-    p <- ggplot(pr.points, aes(x=Recall, y=Precision, color=Method))
-      if (!is.null(baseline)) p <- p + geom_hline(yintercept=baseline, color='gray', linetype='dashed')
-      p <- p + geom_point(size=3)
-        p <- p + geom_line(data=pr.lines)
-        p <- p + mytheme + coord_fixed() + xlim(0,1) + ylim(0,1) + xlab(xlab) + ylab("Precision")
-	  return(p)
+	pr <- pr %>% group_by(Method) %>% mutate(n=n())
+	pr <- separate(data = pr, col = Method, into = c("PredictionType", "Predictor"), sep = "\\.")
+	cg_index <- grep("Closest Gene", pr$PredictionType)
+	ct_index <- grep("Closest TSS", pr$PredictionType)
+	pr$Predictor[cg_index] <- "Closest Gene"
+	pr$Predictor[ct_index] <- "Closest TSS"
+	pr$PredictionType[cg_index] <- "PredictionMax"
+	pr$PredictionType[ct_index] <- "PredictionMax"
+	pr$Group <- 1
+	pr$Group[ct_index] <- 2
+	pr <- pr[!grepl('Score', pr$PredictionType),]
+	Methods <- unlist(pr[!grepl("Closest", pr$Predictor), "Predictor"]) #, " ") %>% unlist()
+	j <- 3
+	rownames(pr) <- c(1:nrow(pr))
+	for (i in 1:length(Methods)){
+		index <- which(pr$Predictor == as.character(Methods[i]))
+		pr$Group[index] <- j
+		j <- j+1
+	}
+	pr.points <- pr %>% filter(n==1)
+	colors <- c("#035594","#a853a5","#bebebe","#595959","#ff5b6e")
+	names(colors) <- levels(pr$Predictor)
+	colScale <- scale_colour_manual(name = "Predictor",values = colors)
+	p <- ggplot(pr.points, aes(x=Recall, y=Precision, shape=PredictionType, color=Predictor)) + colScale
+	if (!is.null(baseline)) p <- p + geom_hline(yintercept=baseline, color='gray', linetype='dashed')
+	p <- p + geom_point(size=5)
+	p <- p + geom_line(aes(group = Group))
+	p <- p + theme(axis.text=element_text(size=14), axis.title=element_text(size=14)) + mytheme + coord_fixed() + xlim(0,1) + ylim(0,1) + xlab(xlab) + ylab("Precision")
+	return(p)
 }
 
-doOneKnownGeneList <- function(gene.list.name, gp, predictors, trait_params, knownGenes, knownGeneMaxDistance=1000000, maxKnownGenes=1) {
-	  # filter for only diseases that exists in trait_params 
-	  #gp <- subset(gp, (Disease %in% unique(trait_params$Disease)))
+doOneKnownGeneList <- function(gene.list.name, gp, predictors, knownGenes, knownGeneMaxDistance=1000000, maxKnownGenes=1) {
 	  ## Current logic: Filter the gene prediction table to those credible sets with exactly one known gene nearby
 	  gp.plot <- gp %>% filter(DistanceToTSS <= knownGeneMaxDistance) %>%
 		  mutate(knownGene=TargetGene %in% knownGenes[[gene.list.name]]) %>%
 		  group_by(CredibleSet) %>% mutate(nKnownGenes=sum(knownGene)) %>% ungroup() %>%
 		  filter(nKnownGenes > 0 & nKnownGenes <= maxKnownGenes & CredibleSet.NoncodingWithSigVariant) %>% as.data.frame()
-	  #pr <- getPRTable(gp.plot, predictors)
-	  #p <- getPRPlot(pr, baseline=getPrecisionBaseline(gp), xlab=paste0("Recall (n=",sum(gp.plot$knownGene),")"))
-	  print(gp.plot)
+	  return(gp.plot)
 }
 
 

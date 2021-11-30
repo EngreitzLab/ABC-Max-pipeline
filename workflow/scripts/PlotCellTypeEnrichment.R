@@ -36,21 +36,20 @@ save.image(file=paste0(opt$outdir, "/PlotCellTypeEnrichment.RData"))
 ###################################################
 ## Load in data relevant to IBD and format for plotting
 
-cellCategories <- read.delim(opt$cellTypes, header=T, sep="\t")
-catOrder <- sort(unique(cellCategories$Categorical.IBDTissueAnnotations2))
-n <- length(unique(catOrder))
-color = grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-catColors <- c("green","orange","blue","purple","pink","brown","gray", sample(color, n-7))
-names(catColors) <- catOrder
-#catOrder <- c("myeloid","Bcell","Tcell","hematopoietic","fibroblast","epithelial","other")
-#catColors <- c("green","orange","blue","purple","pink","brown","gray"); names(catColors) <- catOrder
+#cellCategories <- read.delim(opt$cellTypes, header=T, sep="\t")
+#catOrder <- sort(unique(cellCategories$Categorical.IBDTissueAnnotations2))
+#n <- length(unique(catOrder))
+#color = grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+#catColors <- c("green","orange","blue","purple","pink","brown","gray", sample(color, n-7))
+catOrder <- c("myeloid","Bcell","Tcell","hematopoietic","fibroblast","epithelial","other")
+catColors <- c("green","orange","blue","purple","pink","brown","gray"); names(catColors) <- catOrder
 
 cell.type.annot.all <- read.delim(opt$cellTypes, sep = "\t", header=TRUE, stringsAsFactors=F)
 cellEnrichment <- read.delim(opt$cellTypeEnrichments, sep = "\t", header=TRUE, check.names=F, stringsAsFactors=F, row.names=NULL)
 
 mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1), axis.text = element_text(size = 13), axis.title = element_text(size = 15))
 
-print(catColors)
+print(catOrder)
 ########
 ## Plot cell type enrichments for IBD
 {
@@ -63,14 +62,16 @@ print(catColors)
         ibdEnhancerList <- merge(ibdEnhancerList, subset(enrichPlot, Disease == opt$trait)[,c("CellType", "enrichment")], by="CellType")
   }
   ibdEnhancerList$CellCat <- ordered(ibdEnhancerList$Categorical.IBDTissueAnnotations2, levels=catOrder)
-  ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(cell.type.annot.all[order(cell.type.annot.all$Categorical.IBDTissueAnnotations2),"CellType"]))
-  formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + ylim(0, 22) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=catColors) + scale_color_hue(l=50, c=90) + ylab(paste0("Enrichment\n( ", opt$trait, " variants / all variants)"))
+  ibdEnhancerList$CellType <- ordered(ibdEnhancerList$CellType, levels=rev(unique(cell.type.annot.all[order(cell.type.annot.all$Categorical.IBDTissueAnnotations2),"CellType"])))
+  formatEnrichmentBarPlot <- function(p) p + geom_boxplot() + geom_jitter(position=position_jitter(0.2), size=3) + scale_y_continuous(limits=c(0, 22)) + mytheme + geom_hline(yintercept=1, linetype="dashed", color="gray") + scale_color_manual(values=catColors) + scale_color_hue(l=50, c=90) + ylab(paste0("Enrichment\n( ", opt$trait, " variants / all variants)"))
   
   pdf(file=opt$outPdf, width=5, height=4)
   if (opt$entry == 'enrichment.NoPromoters'){
-	  p1 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment.NoPromoters, color=CellCat)) + ggtitle("Enhancers")
+	  ibdEnhancerList$enrichment.NoPromoters <- as.numeric(ibdEnhancerList$enrichment.NoPromoters)
+	  p1 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment.NoPromoters, color=CellCat)) + ggtitle("Enhancers") + scale_y_continuous(limits=c(0, 22))
 } else {
-  	  p1 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment, color=CellCat)) + ggtitle("Enhancers") 
+	  ibdEnhancerList$enrichment <- as.numeric(ibdEnhancerList$enrichment)
+  	  p1 <- ggplot(ibdEnhancerList, aes(x=CellCat, y=enrichment, color=CellCat)) + ggtitle("Enhancers") + scale_y_continuous(limits=c(0, 22))
   }
   p1 <- p1 %>% formatEnrichmentBarPlot()
   print(p1)

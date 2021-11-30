@@ -143,21 +143,20 @@ mytheme <- theme_classic() #+ theme(
                            #       axis.text = element_text(size = 13),
                            #       axis.title = element_text(size = 15))
 
-getPRPlot <- function(pr, baseline=NULL, xlab="Recall") {
-	pr <- pr %>% group_by(Method) %>% mutate(n=n())
-	#pr <- pr[order(pr$Method), ]
-	pr.points <- pr %>% filter(n==1)
-    	pr.lines <- pr %>% filter(n>1)
-	p <- ggplot(pr.points, aes(x=Recall, y=Precision, color=Method))
-	if (!is.null(baseline)) p <- p + geom_hline(yintercept=baseline, color='gray', linetype='dashed')
-	p <- p + geom_point(size=3)
-	#p <- p + geom_line(data=pr.lines)
-	p <- p + mytheme + coord_fixed() + xlim(0,1) + ylim(0,1) + xlab(xlab) + ylab("Precision")
-	return(p)
-}
+#getPRPlot <- function(pr, baseline=NULL, xlab="Recall") {
+#	pr <- pr %>% group_by(Method) %>% mutate(n=n())
+#	#pr <- pr[order(pr$Method), ]
+#	pr.points <- pr %>% filter(n==1)
+#    	pr.lines <- pr %>% filter(n>1)
+#	p <- ggplot(pr.points, aes(x=Recall, y=Precision, color=Method))
+#	if (!is.null(baseline)) p <- p + geom_hline(yintercept=baseline, color='gray', linetype='dashed')
+#	p <- p + geom_point(size=3)
+#	#p <- p + geom_line(data=pr.lines)
+#	p <- p + mytheme + coord_fixed() + xlim(0,1) + ylim(0,1) + xlab(xlab) + ylab("Precision")
+#	return(p)
+#}
 
 # PLOT Aggregate Precision-Recall Curves
-#names = strsplit(snakemake@input$allgenePredTable, " ") %>% unlist()
 gp.all <- read.delim(snakemake@input$allgenePredTable, sep="\t", header=T, check.names=F, stringsAsFactors=F)
 aggPR <- read.delim(snakemake@input$PRtable, sep="\t", header=T, check.names=F, stringsAsFactors=F)
 nRecall <- aggPR$nRecall

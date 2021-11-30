@@ -11,7 +11,6 @@ option_list <- list(
 		    make_option("--outdir", type="character", default="test", help="Output directory"),
 	            make_option("--outPdf", type="character", help="Output PDF file for enrichment"),
         	    make_option("--outEps", type="character", help="Output EPS file for enrichment"),
-		    make_option(c("--cellTypes"), type="character", default="Test_data/CellTypes.Annotated.ABCPaper.txt", help="Cell type annotation file"),
 	    	    make_option(c("--cellTypeEnrichments"), type="character", default="plots/CellTypeEnrichment.tsv", help= "File containing merged cell type enrichments across traits"),
   		    make_option(c("--codeDir"), type="character", default="ABC-Max-pipeline/", help="code directory"),
 		    make_option(c("--entry"), type="character", default="enrichment", help="feature to plot"),    
@@ -36,16 +35,6 @@ save.image(file=paste0(opt$outdir, "/PlotCellTypeEnrichment.RData"))
 ###################################################
 ## Load in data relevant to IBD and format for plotting
 
-cellCategories <- read.delim(opt$cellTypes, header=T, sep="\t")
-catOrder <- sort(unique(cellCategories$Categorical.IBDTissueAnnotations2))
-n <- length(unique(catOrder))
-color = grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-catColors <- c("green","orange","blue","purple","pink","brown","gray", sample(color, n-7))
-names(catColors) <- catOrder
-#catOrder <- c("myeloid","Bcell","Tcell","hematopoietic","fibroblast","epithelial","other")
-#catColors <- c("green","orange","blue","purple","pink","brown","gray"); names(catColors) <- catOrder
-
-cell.type.annot.all <- read.delim(opt$cellTypes, sep = "\t", header=TRUE, stringsAsFactors=F)
 cellEnrichment <- read.delim(opt$cellTypeEnrichments, sep = "\t", header=TRUE, check.names=F, stringsAsFactors=F, row.names=NULL)
 cellEnrichment <- transform(cellEnrichment, n.FractionOverlap = n / total)
 cellEnrichment <- transform(cellEnrichment, n.noPromoters.FractionOverlap = n.NoPromoters / total.NoPromoters)
