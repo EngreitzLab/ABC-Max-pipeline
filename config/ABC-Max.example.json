@@ -3,7 +3,7 @@
     "codeDir": "/oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/workflow/scripts/",
     "abcDir": "/oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/",
     "logDir": "/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/log/",
-    "outDir": "/oak/stanford/groups/akundaje/projects/ABC_links/ABC_predictions/TraitEnrichmentDistalNonCoding/",
+    "outDir": "/oak/stanford/groups/akundaje/projects/ABC_links/ABC_predictions/TraitEnrichmentDistalNonCoding_test/",
     "partition": "/oak/stanford/groups/akundaje/kmualim/GWAS_test/Test_data/PartitionCombined.bed",
     "resources": "/oak/stanford/groups/akundaje/kmualim/ABC-Max-pipeline/resources/",
     "dataDir": "/oak/stanford/groups/akundaje/kmualim/GWAS_test/Test_data/", 

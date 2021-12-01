@@ -7,8 +7,7 @@ rule plotTraitEnrichment:
 		cellTypeEnrichments = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
 	output:
 		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"),
-		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.eps"),
-#		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), caption="../report/CellTypeEnrichment.rst", category="Trait Enrichment Plots", subcategory="{trait}/{pred}")
+		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.eps")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
 		codeDir = config["codeDir"],
@@ -33,8 +32,7 @@ rule plotTraitEnrichment_noPromoter:
 		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
 	output:
 		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"),
-                outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.eps"),
-#		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"), caption="../report/CellTypeEnrichment.noPromoter.rst", category="Trait Enrichment Plots", subcategory="{trait}/{pred}")
+                outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.eps")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
                 codeDir = config["codeDir"],
@@ -61,8 +59,7 @@ rule plotFractionOverlap:
 		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
 	output:
 		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.pdf"),
-		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.eps"),
-#		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.pdf"), caption="../report/CellTypeOverlap.rst", category="Fraction Enhancer Overlap", subcategory="{trait}/{pred}")
+		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.eps")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
                 codeDir = config["codeDir"],
@@ -89,18 +86,19 @@ rule plotFractionOverlap_noPromoter:
 		cellTypeEnrichments_noPromoter = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv")
 	output:
 		outpdf = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.pdf"),
-		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.eps"),
-#		outpdf = report(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.pdf"), caption="../report/CellTypeOverlap.noPromoter.rst", category="Fraction Enhancer Overlap", subcategory="{trait}/{pred}")
+		outeps = os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.eps")
 	params:
 		cellTypeTable = lambda wildcard: preds_config_file.loc[wildcard.pred, "celltypeAnnotation"],
 		codeDir = config["codeDir"],
 		outDir = os.path.join(config["outDir"], "{pred}/{trait}/"),
 		isCellType = lambda wildcard: bool(preds_config_file.loc[wildcard.pred,"hasCellType"]),
 		entry = "enrichment.NoPromoters"
-	message: "Running fraction overlap plots for predictions without promoters"
+	message: "Running fraction overlap plots (excluding promoter regions) for predictions without promoters"
 	run:
 		shell(
 			"""
+			set +o pipefail;
+
 			Rscript {params.codeDir}/PlotFractionOverlap.R \
 			--outdir {params.outDir} \
 			--outPdf {output.outpdf} \
@@ -127,7 +125,7 @@ rule plotFractionOverlapPosteriorProb:
 		outDir = os.path.join(config["outDir"], "{pred}/"),
                 codeDir = config["codeDir"]
 	
-	message: "Running fraction overlap plots with increasing posterior probability threshold"
+	message: "Running fraction overlap plots (including promoter regions) with increasing posterior probability threshold"
 	run:
 		shell(
 			"""
@@ -232,6 +230,7 @@ rule plottingReport:
 	message: "Compiling R Markdown report in html format"
 	script: os.path.join(config["codeDir"], "plottingFuncReport.Rmd")
 
+
 rule getAggregateReport_input:
 	input:
 		enrichmentFiles = expand("{outdir}{{pred}}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv", outdir=config['outDir'], trait=all_traits)
@@ -296,13 +295,28 @@ rule plottingAggregateTraitReport:
 	message: "Compiling R Markdown report in html format"
 	script: os.path.join(config["codeDir"], "plottingAggregateTraits.Rmd")
 
+
+rule generateGeneListAggregate:
+	input:
+		knownGenes = expand("{outdir}/{geneLists}", outdir=config["geneListDir"], geneLists=trait_config_file.loc[:, "knownGenes"])
+	output:
+		expand("{outdir}/GeneLists.aggregate.txt", outdir=config["resources"])
+	message: "Generating Aggregate Gene List File"
+	run:
+		shell(
+			"""
+			echo "GeneLists" > {output.aggregateGeneList} \
+			cat {input.knownGenes} | grep -v "GeneList*" >> {output.aggregateGeneList}			
+			""")
+
+
 rule plottingAggregateReport:
 	input:
 		allgenePredTableFiles = expand("{outdir}{pred}/{pred}_aggregateGenePredictions.allCredibleSets.Dedup.tsv", pred=all_predictions, outdir=config["outDir"]),
 		enrichmentFiles = expand("{outdir}{pred}/{pred}_aggregateTraitEnrichment.tsv", outdir=config["outDir"], pred=all_predictions),
 		enrichedCellTypes = expand("{outdir}{pred}/{pred}_numEnrichedCellTypesPerTrait.tsv", outdir=config["outDir"], pred=all_predictions),
 		enrichVsPp_noncoding = expand("{outdir}{pred}/EnrichmentVsPosteriorProb.nonCoding.tsv", outdir=config["outDir"], pred=all_predictions),
-		geneLists = expand("{outdir}/GeneLists.aggregate.txt", outdir=config["resources"]) #{geneList}", outdir=config["geneListDir"], geneList=trait_config_file['knownGenes'])
+		geneLists = expand("{outdir}/GeneLists.aggregate.txt", outdir=config["resources"]) 
 	params:
 		codeDir = config["codeDir"],
                 predictors = all_predictions,
@@ -314,6 +328,7 @@ rule plottingAggregateReport:
 		html = os.path.join(config["outDir"], "GWAS_aggregatePredictions_report.html")
 	message: "Compiling R Markdown report in html format"
 	script: os.path.join(config["codeDir"], "plottingAggregatePredictions.Rmd")
+
 
 rule plotPropertyReport:
 	input:

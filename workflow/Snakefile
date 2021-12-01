@@ -12,9 +12,9 @@ preds_config_file = pd.read_table(pred_config).set_index("entry", drop=False)
 trait_config_file = pd.read_table(trait_config).set_index("entry", drop=False)
 
 #all_predictions = [str(pred) for pred in list(preds_config_file.index)]
+all_predictions=["ABC"]
 #all_traits = [str(trait) for trait in list(trait_config_file.index)]
-all_predictions = "ABC"
-all_traits = "IBD"
+all_traits ="IBD"
 # include other snakemake files 
 include: "rules/annotateVariantInputs.smk"
 include: "rules/generateTSSInput.smk"
@@ -23,10 +23,11 @@ include: "rules/plottingFunc.smk"
 include: "rules/mergeEnhancersProperties.smk"
 
 rule all:
-	input:
+	input: 
 		expand(os.path.join(config["outDir"], "{pred}/geneTSS.500bp.bed"), pred=all_predictions),
 		expand(os.path.join(config["outDir"], "Parititon.distalNoncoding.bed")),
 		expand(os.path.join(config["outDir"], "distalNoncoding.bg.SNPs.bed.gz")),
+		
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=all_predictions),
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=all_predictions),
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=all_predictions),
