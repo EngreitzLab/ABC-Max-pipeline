@@ -11,6 +11,7 @@ option_list <- list(
 		    make_option("--outdir", type="character", default="test", help="Output directory"),
 	            make_option("--outPdf", type="character", help="Output PDF file for enrichment"),
         	    make_option("--outEps", type="character", help="Output EPS file for enrichment"),
+		    make_option(c("--cellTypes"), type="character", default="Test_data/CellTypes.Annotated.ABCPaper.txt", help="Cell type annotation file"),
 	    	    make_option(c("--cellTypeEnrichments"), type="character", default="plots/CellTypeEnrichment.tsv", help= "File containing merged cell type enrichments across traits"),
   		    make_option(c("--codeDir"), type="character", default="ABC-Max-pipeline/", help="code directory"),
 		    make_option(c("--entry"), type="character", default="enrichment", help="feature to plot"),    
@@ -41,12 +42,16 @@ cellEnrichment <- transform(cellEnrichment, n.noPromoters.FractionOverlap = n.No
 
 mytheme <- theme_classic() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1), axis.text = element_text(size = 13), axis.title = element_text(size = 15))
 
-print(catColors)
+cell.type.annot.all <- read.delim(opt$cellTypes, sep = "\t", header=TRUE, stringsAsFactors=F)
 ########
 ## Plot cell type enrichments for IBD
 {
   ibdEnhancerList <- cell.type.annot.all
   enrichPlot <- merge(cellEnrichment, cell.type.annot.all[,c("CellType","Categorical.IBDTissueAnnotations2")], by="CellType")
+  catOrder <- sort(unique(cell.type.annot.all$Categorical.IBDTissueAnnotations2))
+  n <- length(unique(catOrder))
+  color = grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+  catColors <- c("green","orange","blue","purple","pink","brown","gray", sample(color, n-7))
   if (opt$entry == 'enrichment.NoPromoters'){
 	ibdEnhancerList <- merge(ibdEnhancerList, subset(enrichPlot, Disease == opt$trait)[,c("CellType", "n.noPromoters.FractionOverlap")], by="CellType")
 	

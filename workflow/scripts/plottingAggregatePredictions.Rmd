@@ -1,7 +1,7 @@
 ---
 title: "Comparing predictions with common disease variants"
 author: "Kristy Mualim" 
-date: "04/15/2021"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
 output:
     html_document:
        toc: true
@@ -46,6 +46,7 @@ enrichVsPp.noncoding.file = strsplit(snakemake@input$enrichVsPp_noncoding, " ") 
 allgenePredTable = strsplit(snakemake@input$allgenePredTableFiles, " ") %>% unlist()
 #PRtableFiles = strsplit(snakemake@input$PRtableFiles, " ") %>% unlist()
 knownGenes = read.delim(snakemake@input$geneLists, sep="\t", header=TRUE, check.names=F, stringsAsFactors=F, row.names=NULL)
+
 ```
 ```{r plottingEnrichmentCode, echo=FALSE, error=FALSE, message=FALSE,  warnings=FALSE}
 ############ DESCRIPTION ###########
@@ -89,9 +90,6 @@ p1 <- p1 %>% formatEnrichmentBarPlot()
 ```{r plottingEnrichmentCode_all, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
 p2 <- ggplot(ibdEnhancerList, aes(x=Disease, y=enrichment, fill=Disease)) + ylab(paste0("Enrichment\n( GWAS variants / all variants)")) + labs(title=paste0("Enhancers (including promoter regions)")) + xlab("Trait") + ylim(0, max(ibdEnhancerList$enrichment)) + facet_wrap(~ Method, ncol=1)
 p2 <- p2 %>% formatEnrichmentBarPlot()
-pdf(file=
-    opt$outPdf, width=5, height=4)
-print(p1)
 #ggplotly(p2)
 ```
 ```{r plottingFractionOverlap, echo=FALSE, error=FALSE, message=FALSE, warnings=FALSE}
@@ -176,7 +174,9 @@ bloodRelatedTraits <- c("Baso","Eosino","Hb","LOY","Lym","MCH","MCHC","MCV","Mon
 mytheme <- theme_classic() #+ theme(axis.text = element_text(size = 13), axis.title = element_text(size = 15))
 trait="IBD"
 p <- ggplot(subset(enrichVsPp.noncoding, nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100, group=Disease)) + geom_line(color='gray') + xlab("PIP (log10)") + ylab("% noncoding variants") + ylim(0,100) + mytheme + facet_wrap(~ Method, ncol=3)
-p <- p + geom_line(data=subset(enrichVsPp.noncoding,Disease%in%bloodRelatedTraits & nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100), color='red')
+if (dim(subset(enrichVsPp.noncoding,Disease%in%bloodRelatedTraits)[1]) != 0) {
+	        p <- p + geom_line(data=subset(enrichVsPp.noncoding,Disease%in%bloodRelatedTraits & nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100), color='red')
+}
 p <- p + geom_line(data=subset(enrichVsPp.noncoding,Disease=="All" & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100), color='black')
 p <- p + geom_line(data=subset(enrichVsPp.noncoding,Disease==trait & nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100), color='blue')
 p <- p + geom_hline(yintercept=7.5, linetype='dashed', color='black')

@@ -1,7 +1,7 @@
 ---
 title: "Comparing predictions with common disease variants"
 author: "Kristy Mualim" 
-date: "04/15/2021"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
 output:
     html_document:
        toc: true
@@ -129,19 +129,18 @@ cdf = ggplot(aggregateDF, aes(x=enrichment.NoPromoters, col=Method)) +
 bloodRelatedTraits <- c("Baso","Eosino","Hb","LOY","Lym","MCH","MCHC","MCV","Mono","Neutro","RBC","WBC")
 
 # set theme
-mytheme <- theme_classic() #+ theme(axis.text = element_text(size = 13), axis.title = element_text(size = 15))
-trait="IBD"
+mytheme <- theme_classic() 
 p <- ggplot(subset(enrichVsPp.noncoding, nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100, group=Disease)) + geom_line(color='gray') + xlab("PIP (log10)") + ylab("% noncoding variants") + ylim(0,100) + mytheme
-p <- p + geom_line(data=subset(enrichVsPp.noncoding,Disease%in%bloodRelatedTraits & nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100), color='red')
+if (dim(subset(enrichVsPp.noncoding,Disease%in%bloodRelatedTraits)[1]) != 0) {
+	p <- p + geom_line(data=subset(enrichVsPp.noncoding,Disease%in%bloodRelatedTraits & nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100), color='red')
+}
 p <- p + geom_line(data=subset(enrichVsPp.noncoding,Disease=="All" & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100), color='black')
-p <- p + geom_line(data=subset(enrichVsPp.noncoding,Disease==trait & nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100), color='blue')
+p <- p + geom_line(data=subset(enrichVsPp.noncoding,Disease=="IBD" & nTotal >= 5 & PosteriorProb <= 0.95), aes(x=log10(PosteriorProb), y=fraction*100), color='blue')
 p <- p + geom_hline(yintercept=7.5, linetype='dashed', color='black')
 p <- p 
 ```
 ```{r plotAggregatePR , echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.width=6, fig.height=4}
-mytheme <- theme_classic() #+ theme(
-                           #       axis.text = element_text(size = 13),
-                           #       axis.title = element_text(size = 15))
+mytheme <- theme_classic()
 
 #getPRPlot <- function(pr, baseline=NULL, xlab="Recall") {
 #	pr <- pr %>% group_by(Method) %>% mutate(n=n())

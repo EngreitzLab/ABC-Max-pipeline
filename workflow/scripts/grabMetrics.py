@@ -44,12 +44,14 @@ def grepGenes(inputs):
 def grabMetrics(args):
     # read in prediction file 
     data = pd.read_csv(args.predFile, sep="\t", names=['chr', 'start', 'end', 'Genes', 'numGenes', 'Biosample', 'numBiosample'])
+#    os.system("zcat {} | awk '{ $8 = $3 - $2 } 1' > | cut -f4,8 > {}".format(args.predFile, args.totalUniqueBp))
     genes = pd.read_csv(args.genes, sep="\t")
     
     numGenes = 0
     print("Grabbing total number of unique basepairs")
     # Number of total unique basepairs contained in enhancers for each gene 
     starttime = time.time()
+    
     inputs = []
     for gene in genes['name'].drop_duplicates():
         inputs.append((args.predFile, gene, args.totalUniqueBp, args.numGenes, args.outdir))
