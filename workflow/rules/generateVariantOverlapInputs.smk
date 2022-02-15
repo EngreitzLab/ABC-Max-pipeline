@@ -163,7 +163,7 @@ rule overlapVariants_noPromoter:
 			zcat {input.overlap} | head -1 | gzip > {output.overlap_noPromoter}
 			
 			# Removing promoter regions from disease variants
-			zcat {input.overlap} | sed 1d | bedtools intersect -g {params.chrSizes} -b {input.geneTSS} -a stdin | gzip >> {output.overlap_noPromoter}
+			zcat {input.overlap} | sed 1d | bedtools intersect -v -g {params.chrSizes} -b {input.geneTSS} -a stdin | gzip >> {output.overlap_noPromoter}
 		 					
 			""")
 
