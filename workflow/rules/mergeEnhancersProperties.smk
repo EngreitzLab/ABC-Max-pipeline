@@ -36,6 +36,11 @@ rule generateCountMetrics:
 	run:
 		shell(
 			"""
+			# Generates output files, each answering a global statistic about the set of enhancer-gene connections
+			# numGenes : Number of Genes that regulate an enhancer
+			# numEGCounts : Number of Enhancer-Gene Connections
+			# numBiosamplesCounts : For a given enhancer, in how many other biosamples does this region also regulate a gene?
+			# totalUniquebp: How many total unique basepairs constitute all enhancers that regulate a gene?
 			python {params.metrics} \
 			--predFile {input.mergedPredFile} \
 			--totalUniqueBp {output.totalUniquebp} \

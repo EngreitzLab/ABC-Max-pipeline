@@ -17,14 +17,19 @@ rule plotTraitEnrichment:
 	run:
 		shell(
 			"""
-			Rscript {params.codeDir}/PlotCellTypeEnrichment.R \
-			--outdir {params.outDir} \
-			--outPdf {output.outpdf} \
-			--outEps {output.outeps} \
-			--cellTypes {params.cellTypeTable} \
-			--cellTypeEnrichments {input.cellTypeEnrichments} \
-			--codeDir {params.codeDir} \
-			--trait {wildcards.trait} 
+			touch {output.outeps}
+			touch {output.outpdf}
+			# Plot trait enrichments by cell categories
+			if [ $(wc -l <{input.cellTypeEnrichments}) -ge 1 ];then
+				Rscript {params.codeDir}/PlotCellTypeEnrichment.R \
+				--outdir {params.outDir} \
+				--outPdf {output.outpdf} \
+				--outEps {output.outeps} \
+				--cellTypes {params.cellTypeTable} \
+				--cellTypeEnrichments {input.cellTypeEnrichments} \
+				--codeDir {params.codeDir} \
+				--trait {wildcards.trait}
+			fi
 			""")
 
 rule plotTraitEnrichment_noPromoter:
@@ -43,15 +48,20 @@ rule plotTraitEnrichment_noPromoter:
 	run:
 		shell(
 			"""
-			Rscript {params.codeDir}/PlotCellTypeEnrichment.R \
-			--outdir {params.outDir} \
-			--outPdf {output.outpdf} \
-			--outEps {output.outeps} \
-			--cellTypes {params.cellTypeTable} \
-			--cellTypeEnrichments {input.cellTypeEnrichments_noPromoter} \
-			--codeDir {params.codeDir} \
-			--trait {wildcards.trait} \
-			--entry {params.entry}
+			# Plot trait enrichment by cell categories (excluding promoter regions)
+			touch {output.outeps}
+			touch {output.outpdf}
+			if [ -s {input.cellTypeEnrichments_noPromoter} ];then
+				Rscript {params.codeDir}/PlotCellTypeEnrichment.R \
+				--outdir {params.outDir} \
+				--outPdf {output.outpdf} \
+				--outEps {output.outeps} \
+				--cellTypes {params.cellTypeTable} \
+				--cellTypeEnrichments {input.cellTypeEnrichments_noPromoter} \
+				--codeDir {params.codeDir} \
+				--trait {wildcards.trait} \
+				--entry {params.entry}
+			fi
 			""")
 
 rule plotFractionOverlap:
@@ -70,15 +80,21 @@ rule plotFractionOverlap:
 	run:
 		shell(
 			"""
-                        Rscript {params.codeDir}/PlotFractionOverlap.R \
-                        --outdir {params.outDir} \
-                        --outPdf {output.outpdf} \
-                        --outEps {output.outeps} \
-                        --cellTypes {params.cellTypeTable} \
-                        --cellTypeEnrichments {input.cellTypeEnrichments_noPromoter} \
-                        --codeDir {params.codeDir} \
-                        --trait {wildcards.trait} \
-                        --entry {params.entry}
+			# Plot trait overlap by cell categories 
+			touch {output.outeps}
+			touch {output.outpdf}
+			## Checks if file is empty
+			if [ -s {input.cellTypeEnrichments_noPromoter} ];then
+	                        Rscript {params.codeDir}/PlotFractionOverlap.R \
+	                        --outdir {params.outDir} \
+	                        --outPdf {output.outpdf} \
+	                        --outEps {output.outeps} \
+	                        --cellTypes {params.cellTypeTable} \
+	                        --cellTypeEnrichments {input.cellTypeEnrichments_noPromoter} \
+	                        --codeDir {params.codeDir} \
+	                        --trait {wildcards.trait} \
+	                        --entry {params.entry}
+			fi
                         """)
 
 rule plotFractionOverlap_noPromoter:
@@ -97,17 +113,21 @@ rule plotFractionOverlap_noPromoter:
 	run:
 		shell(
 			"""
+			# Plot trait overlap by cell categories (excluding promoter regions)
 			set +o pipefail;
-
-			Rscript {params.codeDir}/PlotFractionOverlap.R \
-			--outdir {params.outDir} \
-			--outPdf {output.outpdf} \
-                        --outEps {output.outeps} \
-                        --cellTypes {params.cellTypeTable} \
-                        --cellTypeEnrichments {input.cellTypeEnrichments_noPromoter} \
-                        --codeDir {params.codeDir} \
-                        --trait {wildcards.trait} \
-                        --entry {params.entry}
+			touch {output.outeps}
+			touch {output.outpdf}
+			if [ -s {input.cellTypeEnrichments_noPromoter} ];then
+				Rscript {params.codeDir}/PlotFractionOverlap.R \
+				--outdir {params.outDir} \
+				--outPdf {output.outpdf} \
+                        	--outEps {output.outeps} \
+                       		--cellTypes {params.cellTypeTable} \
+                        	--cellTypeEnrichments {input.cellTypeEnrichments_noPromoter} \
+                        	--codeDir {params.codeDir} \
+                        	--trait {wildcards.trait} \
+                        	--entry {params.entry}
+			fi
 			""")
 
 rule plotFractionOverlapPosteriorProb:
@@ -129,8 +149,8 @@ rule plotFractionOverlapPosteriorProb:
 	run:
 		shell(
 			"""
+			# Plot trait overlap by cell categories with increasing posterior probability threshold
 			set +o pipefail;
-			
 			Rscript {params.codeDir}/PlotVariantFractionPosProb.R \
 			--allFlat "{input.allflat}" \
 			--datadir {params.dataDir} \
@@ -139,7 +159,7 @@ rule plotFractionOverlapPosteriorProb:
 			--codeDir {params.codeDir} \
 			--outfile {output.tsv} \
 			--pdf {output.pdf} \
-			--outfile_noncoding {output.noncoding}	
+			--outfile_noncoding {output.noncoding}
 			""")
 		
 
@@ -156,11 +176,15 @@ rule plotIndividualGenePrecisionRecall:
         run:
                 shell(
 			"""
-			Rscript {params.codeDir}/PlotGenePrecisionRecall.R \
-                        --outPdf {output.prPdf} \
-                        --genePredTable {input.genePredTable} \
-                        --knownGenes {input.knownGenes} \
-                        --codeDir {params.codeDir}
+			# Plot precision-recall curve of how precise an enhancer-gene linking method is at linking GWAS variants to their target genes
+			touch {output.prPdf}
+			if [ -s {input.genePredTable} ];then
+				Rscript {params.codeDir}/PlotGenePrecisionRecall.R \
+		        	--outPdf {output.prPdf} \
+		        	--genePredTable {input.genePredTable} \
+		        	--knownGenes {input.knownGenes} \
+		        	--codeDir {params.codeDir}
+			fi
                         """)
 
 rule plotGenePrecisionRecall:
@@ -176,6 +200,8 @@ rule plotGenePrecisionRecall:
 	run:
 		shell(
 			"""
+			# Plot precision-recall curve of how precise an enhancer-gene linking method is at linking GWAS variants to their target genes
+			# aggregate across all predictive methods
 			Rscript {params.codeDir}/PlotGenePrecisionRecall.R \
 			--outPdf {output.prPdf} \
 			--genePredTable "{input.genePredTable}" \
@@ -198,6 +224,7 @@ rule plotAggregate_cdf:
 	run:
 		shell(
 			"""
+			# Plots aggregate CDF enrichment plots across all predictions
 			Rscript {params.codeDir}/PlotEnrichmentAggregate.R \
 			--names "{params.predictors}" \
 			--tables "{input.enrichmentFiles}" \
@@ -205,7 +232,8 @@ rule plotAggregate_cdf:
 			--outDensity {output.outDensity} \
 			--outDir {params.outDir}
 			""")
-	
+
+# Plots trait enrichment across all biosamples for every predictive method	
 rule plottingReport: 
 	input:
 		cellTypeEnrichments = os.path.join(config["outDir"], "{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv"),
@@ -230,7 +258,7 @@ rule plottingReport:
 	message: "Compiling R Markdown report in html format"
 	script: os.path.join(config["codeDir"], "plottingFuncReport.Rmd")
 
-
+# Plots trait enrichment across all biosamples for all predictive methods, generates enrichment values 
 rule getAggregateReport_input:
 	input:
 		enrichmentFiles = expand("{outdir}{{pred}}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv", outdir=config['outDir'], trait=all_traits)
@@ -251,7 +279,7 @@ rule getAggregateReport_input:
 			--outfile {output.outfile} \
 			--numCellTypes {output.numCellTypes}
 			""")	
-
+# Plots aggregate precision-recall curve indicating how well each predictive method does at linking GWAS variants to their target genes
 rule getAggregatePR_input:
 	input:
 		allgenePredTable = expand("{outdir}{{pred}}/{trait}/GenePredictions.allCredibleSets.Dedup.tsv",outdir=config["outDir"], trait=all_traits),
@@ -274,6 +302,7 @@ rule getAggregatePR_input:
 			--knownGenes "{input.knownGenes}"
 			""")
 
+# Plots trait enrichment values across all traits per predictive methods
 rule plottingAggregateTraitReport:
 	input:
 		allgenePredTable = expand("{outdir}{{pred}}/{{pred}}_aggregateGenePredictions.allCredibleSets.Dedup.tsv", outdir=config["outDir"]),
@@ -295,7 +324,7 @@ rule plottingAggregateTraitReport:
 	message: "Compiling R Markdown report in html format"
 	script: os.path.join(config["codeDir"], "plottingAggregateTraits.Rmd")
 
-
+# Combined all the gene lists of all traits into one gene list
 rule generateGeneListAggregate:
 	input:
 		knownGenes = expand("{outdir}/{geneLists}", outdir=config["geneListDir"], geneLists=trait_config_file.loc[:, "knownGenes"])
@@ -309,7 +338,7 @@ rule generateGeneListAggregate:
 			cat {input.knownGenes} | grep -v "GeneList*" >> {output.aggregateGeneList}			
 			""")
 
-
+# Plots trait enrichment values for all traits (aggregate statistics) across all predictive methods 
 rule plottingAggregateReport:
 	input:
 		allgenePredTableFiles = expand("{outdir}{pred}/{pred}_aggregateGenePredictions.allCredibleSets.Dedup.tsv", pred=all_predictions, outdir=config["outDir"]),
@@ -329,7 +358,7 @@ rule plottingAggregateReport:
 	message: "Compiling R Markdown report in html format"
 	script: os.path.join(config["codeDir"], "plottingAggregatePredictions.Rmd")
 
-
+# Plots metrics from enhancer gene connections generated by each predictive method
 rule plotPropertyReport:
 	input:
 		enhancerPredictions = expand("{outdir}{pred}_enhancerRegions_signal_coverage.tsv", outdir=config["resources"], pred=all_predictions), 
