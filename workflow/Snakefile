@@ -11,10 +11,9 @@ trait_config = config["traitTable"]
 preds_config_file = pd.read_table(pred_config).set_index("entry", drop=False)
 trait_config_file = pd.read_table(trait_config).set_index("entry", drop=False)
 
-#all_predictions = [str(pred) for pred in list(preds_config_file.index)]
-all_predictions=["ABC"]
-#all_traits = [str(trait) for trait in list(trait_config_file.index)]
-all_traits ="IBD"
+all_predictions = [str(pred) for pred in list(preds_config_file.index)]
+all_traits = [str(trait) for trait in list(trait_config_file.index)]
+
 # include other snakemake files 
 include: "rules/annotateVariantInputs.smk"
 include: "rules/generateTSSInput.smk"
@@ -22,12 +21,16 @@ include: "rules/generateVariantOverlapInputs.smk"
 include: "rules/plottingFunc.smk"
 include: "rules/mergeEnhancersProperties.smk"
 
+# rule all includes all of the output files for the different steps of the Enrichment analysis
 rule all:
 	input: 
+		# generates geneTSS file from genes file provided in config file
+		# This is used in enrichment calculations (excluding promoters)
 		expand(os.path.join(config["outDir"], "{pred}/geneTSS.500bp.bed"), pred=all_predictions),
+		# generates a partition file that contains only distalNoncoding elements, uses the partition file in the config file
 		expand(os.path.join(config["outDir"], "Parititon.distalNoncoding.bed")),
+		# generates a list of distal noncoding background SNPs 
 		expand(os.path.join(config["outDir"], "distalNoncoding.bg.SNPs.bed.gz")),
-		
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapAllSNPs.tsv.gz"), pred=all_predictions),
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.tsv"), pred=all_predictions),
 		expand(os.path.join(config["outDir"], "{pred}/{pred}.OverlapCounts.AllNoncoding.tsv"), pred=all_predictions),
@@ -46,21 +49,21 @@ rule all:
 		expand(os.path.join(config["outDir"], "{pred}/{trait}/{trait}.{pred}.txt"), trait=all_traits, pred=all_predictions),
 		expand("{outdir}{pred}/{trait}/data/all.flat.tsv", outdir=config["outDir"], trait=all_traits, pred=all_predictions),
 		expand("{outdir}{pred}/{trait}/enrichment/Enrichment.CellType.vsScore.{trait}.tsv", outdir=config["outDir"], trait=all_traits, pred=all_predictions),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.pdf"), trait=all_traits, pred=all_predictions),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.pdf"), trait=all_traits, pred=all_predictions),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.pdf"), trait=all_traits, pred=all_predictions),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.pdf"), trait=all_traits, pred=all_predictions),
-		expand("{outdir}{pred}/{trait}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"], trait=all_traits, pred=all_predictions),
-		expand("{outdir}{pred}/{trait}/GenePredictions.allCredibleSets.Dedup.tsv", outdir=config["outDir"], trait=all_traits, pred=all_predictions),
-		expand("{outdir}{pred}/{trait}/GenePrecisionRecall.pdf", outdir=config["outDir"], trait=all_traits, pred=all_predictions),
-		expand(os.path.join(config["outDir"], "{pred}/EnrichmentVsPosteriorProb.tsv"), pred=all_predictions),
-		expand(os.path.join(config["outDir"], "{pred}/EnrichmentVsPosteriorProb.pdf"), pred=all_predictions),
-		expand(os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"), trait=all_traits),
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.mergedEnhancerRegions.tsv.gz"), pred=all_predictions),
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.metrics.numGenes.tsv"), pred=all_predictions),
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.metrics.numBiosamplesCounts.tsv"), pred=all_predictions),
-		expand(os.path.join(config["outDir"], "{pred}/{pred}.metrics.uniquebp.tsv"), pred=all_predictions),
-		expand(os.path.join(config["outDir"], "{pred}/{trait}/GWAS_enrichment_report.html"), trait=all_traits, pred=all_predictions),
-		expand(os.path.join(config["outDir"], "{pred}/GWAS_aggregateTrait_report.html"), pred=all_predictions),
-		expand(os.path.join(config["outDir"], "GWAS_aggregatePredictions_report.html"), pred=all_predictions),
-		expand(os.path.join(config["outDir"], "property_aggregate_report.html"))
+#		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.eps"), trait=all_traits, pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeEnrichment.{trait}.noPromoter.eps"), trait=all_traits, pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.eps"), trait=all_traits, pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "{pred}/{trait}/CellTypeOverlap.{trait}.noPromoter.eps"), trait=all_traits, pred=all_predictions),
+#		expand("{outdir}{pred}/{trait}/GenePredictions.allCredibleSets.tsv", outdir=config["outDir"], trait=all_traits, pred=all_predictions),
+#		expand("{outdir}{pred}/{trait}/GenePredictions.allCredibleSets.Dedup.tsv", outdir=config["outDir"], trait=all_traits, pred=all_predictions),
+#		expand("{outdir}{pred}/{trait}/GenePrecisionRecall.pdf", outdir=config["outDir"], trait=all_traits, pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "{pred}/EnrichmentVsPosteriorProb.tsv"), pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "{pred}/EnrichmentVsPosteriorProb.pdf"), pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "GWAS.{trait}.GenePrecisionRecall.pdf"), trait=all_traits),
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.mergedEnhancerRegions.tsv.gz"), pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.metrics.numGenes.tsv"), pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.metrics.numBiosamplesCounts.tsv"), pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "{pred}/{pred}.metrics.uniquebp.tsv"), pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "{pred}/{trait}/GWAS_enrichment_report.html"), trait=all_traits, pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "{pred}/GWAS_aggregateTrait_report.html"), pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "GWAS_aggregatePredictions_report.html"), pred=all_predictions),
+#		expand(os.path.join(config["outDir"], "property_aggregate_report.html"))
