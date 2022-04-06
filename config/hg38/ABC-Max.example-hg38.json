@@ -1,0 +1,25 @@
+{
+    "projectDir": "/oak/stanford/groups/akundaje/kmualim/github/ABC-Max-pipeline/workflow",
+    "codeDir": "/oak/stanford/groups/akundaje/kmualim/github/ABC-Max-pipeline/workflow/scripts/",
+    "logDir": "/oak/stanford/groups/akundaje/kmualim/github/ABC-Max-pipeline/log/",
+    "outDir": "/oak/stanford/groups/akundaje/kmualim/ABC_links/ABC_predictions/hg38_liftOver_ABCPaper-ABC-Max/",
+    "partition": "/oak/stanford/groups/akundaje/kmualim/GWAS_test/Test_data/hg38resources/PartitionCombined.bed",
+    "resources": "/oak/stanford/groups/akundaje/kmualim/github/ABC-Max-pipeline/resources/",
+    "dataDir": "/oak/stanford/groups/akundaje/kmualim/GWAS_test/Test_data/", 
+    "predDir":"/oak/stanford/groups/akundaje/kmualim/GWAS_test/Test_data/Predictions/",
+    "traitDir":"/oak/stanford/groups/akundaje/kmualim/GWAS_test/Test_data/Traits/liftOver_hg38_GWAS_Traits/",
+    "geneListDir":"/oak/stanford/groups/akundaje/kmualim/GWAS_test/Test_data/Traits/GeneLists/",
+    "chrSizes": "/oak/stanford/groups/akundaje/kmualim/GWAS_test/Test_data/hg38resources/hg38.chrom.sizes",
+    "CDS": "/oak/stanford/groups/akundaje/kmualim/GWAS_test/Test_data/GeneCDS.hg38.bed",
+    "bgVariants": "/oak/stanford/groups/akundaje/kmualim/GWAS_test/Test_data/all.bg.SNPs.hg38.sorted.bed.gz",
+    "promoterActivityRef" : "/oak/stanford/groups/akundaje/kmualim/GWAS_test/Test_data/GeneList.txt",
+    "predictorOfChoice": "ABC-ENCODE",
+    "predictionsTable":"/oak/stanford/groups/akundaje/kmualim/github/ABC-Max-pipeline/config/hg38/ABC-Max.config-preds-test.hg38.tsv",
+    "traitTable":"/oak/stanford/groups/akundaje/kmualim/github/ABC-Max-pipeline/config/hg38/ABC-Max.config-traits.tsv1",
+    "predictions": [
+       "ABC"
+    ],
+    "traits": [
+        "IBD"
+        ]
+}

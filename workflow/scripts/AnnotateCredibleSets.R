@@ -36,7 +36,6 @@ option.list <- list(
   # make_option("--scoreType", type="character", default="PP", help="Type of variantScoreCol, used in plot labels."),
   make_option("--variantScoreThreshold", type="numeric", default=0.1, help="Score cutoff for desired variants to analyze, e.g. PP>=0.1"),
   # make_option("--variantCtrlScoreThreshold", type="numeric", default=0.01, help="Score cutoff for for a control set of variants, e.g. PP<0.01"),
-  # TODO: Move the background variant calculation to another script, because it needs to be run once for every prediction method, not once for every prediction method x trait combination
   make_option("--backgroundVariants", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/all.bg.SNPs.bed.gz", help="A set of background variants to use in the enrichment analysis. Bed format with chr, start, end, rsID"),
   make_option("--backgroundVariants_noPromoter", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/all.bg.SNPs.noPromoter.bed.gz", help="A set of background variants to use in the enrichment analysis. Bed format with chr, start, end, rsID"),
   make_option("--bgOverlap", type="character", default="/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_out/ABC.OverlapAllSNPs.tsv.gz", help="Background variant overlap with predictions. Bed format with chr, start, end, rsID, enh-chr, enh-start, enh-end, CellType"),
@@ -46,19 +45,8 @@ option.list <- list(
   make_option("--geneTSS", type="character", default="/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/RefSeqCurated.170308.bed.CollapsedGeneBounds.bed", help="TSS of genes file calculated"),
   make_option("--chr_sizes", type="character", help="Chromosome sizes"),
   make_option("--isEnhancerBed", type="logical", help="Calculating enrichment of an enhancer bedfile?"),
-
   make_option("--genePredMaxDistance", type="numeric", default=1000000, help="Gene prediction table: Include genes within this distance"),
   make_option("--biosampleEnrichThreshold", type="numeric", default=0.001, help="Gene prediction and enrichment tables: Bonferroni-adjusted p-value to call biosample as significantly enriched for overlapping variants (set to 1 to include all biosamples in gene prediction table)"),
-
-  #make_option("--cellTypeTable", type="character", help="Table with annotations of cell types, with columns 'CellType', 'Categorical.*', 'Binary.*' for plotting enrichments"),
-  #make_option("--relevantCellTypes", type="character", default="Binary.IBDRelevant", help="Column in cell type table containing mask for cell types that are 'relevant' to the trait"),
-  #make_option("--tissueCategory", type="character", default="Categorical.IBDTissueAnnotations", help="Column in the cell type table containing tissue type categories"),
-  #make_option("--predColForStats", type="character", default="ConnectionStrengthRank.Binary.IBDRelevant", help="Prediction to use for making stats"),
-  #make_option("--gex", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/GeneTSSActivityQuantile.tsv", help="Filename with table of gene expression (or promoter activity) quantiles"),
-  #make_option("--gexQuantileCutoff", type="numeric", default=0.4, help="Gene expression quantile cutoff to count gene as expressed"),
-  #make_option("--promoterActivityRef", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/GeneList.txt", help="File from 1 cell type to use to extract distribution of promoter activity across genes (used for TSS-activity weighted predictions)"),
-  #make_option("--cellTypeCov", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/covariance.all.tsv"),
-  #make_option("--specificityBackground", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/allSpecificityScores.SparseMatrix.rds"),
   make_option("--removePromoterVariants", type="logical", default=FALSE, help="Remove credible sets with promoter variants from the filter.cs list"),
   make_option("--removeCodingVariants", type="logical", default=TRUE, help="Remove credible sets with coding variants from the filter.cs list"),
   make_option("--removeSpliceSiteVariants", type="logical", default=TRUE, help="Remove credible sets with splice site variants from the filter.cs list"),
@@ -128,7 +116,7 @@ if (opt$hasCellType) {
 
 # All credible sets
 all.cs <- read.delim(opt$credibleSets, check.names=F, stringsAsFactors=F)
-all.cs$CredibleSet <- factor(all.cs$CredibleSet)
+#all.cs$CredibleSet <- factor(all.cs$CredibleSet)
 all.cs$MaxVariantScore <- sapply(all.cs$CredibleSet, function(cs) max(subset(variant.list, CredibleSet == cs)[,opt$variantScoreCol]))
 
 all.cs$AnyCoding <- as.logical(all.cs$AnyCoding)
@@ -155,9 +143,7 @@ if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
 # Overlapping variants with predictions
 # the required column names
 overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, isTargetGeneTSS=opt$hasTargetGeneTSS)
-write.table(overlap, file=paste0(opt$outbase, "data/overlap.full.tsv"))
 overlap <- filterVariantOverlap(overlap, opt$predScoreCol, opt$minPredScore, opt$minPredScorePromoters, opt$hasTargetGeneTSS)
-write.table(overlap, file=paste0(opt$outbase, "data/overlap.tsv"))
 
 # Annotating overlaps
 all.flat <- annotateVariantOverlaps(overlap, variant.list, all.cs)
@@ -187,16 +173,17 @@ variant.list.filter.file=paste0(opt$outbase, "data/variant.filter.tsv")
 
 # Creating an output directory and writing the result to files
 dir.create(paste0(opt$outbase,"data/"))
-
-filter.flat <- filter.flat[, c((1:ncol(filter.flat))[-1], 1)]
+filter.flat <- filter.flat[, c((2:ncol(filter.flat)), 1)]
 write.tab(all.flat, file=all.flat.file)
 write.tab(filter.flat, file=filter.flat.file)
 if (!(is.null(sigScore.flat))) {
   write.tab(sigScore.flat, file=paste0(opt$outbase, "data/sigScore.flat.tsv"))
 }
-variant.list.filter$pos_end <- variant.list.filter$position + 1
+variant.list.filter$pos_end <- variant.list.filter[, c(2)] + 1
 colnames <- names(variant.list.filter)
-variant.list.filter <- variant.list.filter[, c(1, 2, length(colnames), 3:length(colnames)-1)]
+#write.tab(variant.list.filter, file="test.tmp")
+variant.list.filter <- variant.list.filter[, c(1, 2, length(colnames), 3:length(colnames)-2)]
+#write.tab(variant.list.filter, file="test.tmp1")
 write.tab(variant.list.filter, file=variant.list.filter.file)
 # Reading in the gene TSS activity quantile information
 # gex <- read.delim(opt$gex, check.names=F)
@@ -219,7 +206,7 @@ dir.create(edir)
 #  tryCatch({
 #curr.vl <- subset(variant.list.filter, Disease==trait)
 variant.by.cells <- getVariantByCellsTable(filter.flat, isCellType=opt$hasCellType, isEnhancerBed=opt$isEnhancerBed)
-#write.tab(variant.by.cells, file="variant.by.cells.tsv")
+write.tab(variant.by.cells, file="variant.by.cells.all.tsv")
 ## Get Corresponding background variant, background Overlap and prediction File without regions that
 # intersect with promoters
 # A set of background variants
