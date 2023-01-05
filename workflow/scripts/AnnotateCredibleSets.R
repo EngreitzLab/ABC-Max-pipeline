@@ -33,9 +33,7 @@ option.list <- list(
   make_option("--minPredScorePromoters", type="numeric", default=NA, help="Cutoff on prediction score for tss/promoter elements"),
   make_option("--trait", type="character", help="Name of the trait or disease"),
   make_option("--variantScoreCol", type="character", default="PosteriorProb", help="Score determining variant significance. If set to NULL, all variants in the input file will be included"),
-  # make_option("--scoreType", type="character", default="PP", help="Type of variantScoreCol, used in plot labels."),
   make_option("--variantScoreThreshold", type="numeric", default=0.1, help="Score cutoff for desired variants to analyze, e.g. PP>=0.1"),
-  # make_option("--variantCtrlScoreThreshold", type="numeric", default=0.01, help="Score cutoff for for a control set of variants, e.g. PP<0.01"),
   make_option("--backgroundVariants", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/all.bg.SNPs.bed.gz", help="A set of background variants to use in the enrichment analysis. Bed format with chr, start, end, rsID"),
   make_option("--backgroundVariants_noPromoter", type="character", default="//oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_data/all.bg.SNPs.noPromoter.bed.gz", help="A set of background variants to use in the enrichment analysis. Bed format with chr, start, end, rsID"),
   make_option("--bgOverlap", type="character", default="/oak/stanford/groups/akundaje/kmualim/ABC-MAX-pipeline/Test_out/ABC.OverlapAllSNPs.tsv.gz", help="Background variant overlap with predictions. Bed format with chr, start, end, rsID, enh-chr, enh-start, enh-end, CellType"),
@@ -73,12 +71,11 @@ saveProgress()
 ## Load common data
 
 # convert all boolean to caps strings
-## TODO: Change these to booleans instead of string, DONE
 opt$hasCellType <- as.logical(opt$hasCellType)
 opt$hasTargetGeneTSS <- as.logical(opt$hasTargetGeneTSS)
+trait <- opt$trait
 genes.tss.file = opt$geneTSS
 # All genes
-## TODO: Move all of this gene processing logic somewhere else, so that the gene files input into this script are fully ready ; DONE
 genes <- readBed(opt$genes)
 genes <- addTSSToBED(genes)
 # Genes used in the predictions
@@ -86,39 +83,14 @@ genes.uniq <- readBed(opt$genesUniq)
 genes.uniq <- addTSSToBED(genes.uniq)
 ## Only include protein-coding genes
 genes.uniq <- subset(genes.uniq, name %in% genes$name)
-# Housekeeping genes to ignore
-# hk.list <- read.delim(opt$housekeepingList, header=F, stringsAsFactors=F)[,1]
 
 #  Vector of all diseases/traits in the variant list
-# TODO: assuming one trait per variant list, DONE
 variant.list <- read.delim(opt$variants, check.names=F)
-#diseases <- unique(variant.list$Disease)
-
-# Finding a vector of relevant cell types
-# TODO: Requirements for this file? CellType | Categorical.IBDTissueAnnotations2
-# TODO: only use this celltype table is using the ABC predictions. Else?
-#if (opt$cellTypeTable != "nan") { 
-#  cell.type.annot <- read.delim(opt$cellTypeTable, check.names=F)
-#  cell.type.list <- cell.type.annot$CellType
-#}
-
-if (opt$hasCellType) {
-  ## JME: This is not the best way to get this list of cell types
-  ## KSM: Updated to grab celltypes from prediction file instead
-  bgOverlap <- read.delim(opt$bgOverlap, check.names=F, header=F)
-  cell.type.list <- unique(bgOverlap$V1)
-} else {
-  ## JME: I don't understand what this does?
-  ## KSM: Initializing the variable 
-  cell.type.list <- NULL
-}
 
 
 # All credible sets
 all.cs <- read.delim(opt$credibleSets, check.names=F, stringsAsFactors=F)
-#all.cs$CredibleSet <- factor(all.cs$CredibleSet)
 all.cs$MaxVariantScore <- sapply(all.cs$CredibleSet, function(cs) max(subset(variant.list, CredibleSet == cs)[,opt$variantScoreCol]))
-
 all.cs$AnyCoding <- as.logical(all.cs$AnyCoding)
 all.cs$AnySpliceSite <- as.logical(all.cs$AnySpliceSite)
 all.cs$AnyPromoter <- as.logical(all.cs$AnyPromoter)
@@ -131,40 +103,18 @@ filter.cs <- subset(all.cs, (!AnyCoding | !opt$removeCodingVariants) &
 
 variant.list.filter <- subset(variant.list, CredibleSet %in% filter.cs$CredibleSet)
 
-# Finding CSs and variants that exceed the provided threhold. If no variant score
-# and threshold are provided, using all variants in downstream steps
-sigScore.cs = NULL
-variant.list.sigScore = NULL
-if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
-  sigScore.cs <- subset(filter.cs, CredibleSet %in% subset(variant.list.filter, get(opt$variantScoreCol) >= opt$variantScoreThreshold)$CredibleSet)
-  variant.list.sigScore <- subset(variant.list.filter, CredibleSet %in% sigScore.cs$CredibleSet) ## this is the list of variants in credible sets with at least 1 variant with posterior prob >10%
-}
-
 # Overlapping variants with predictions
 # the required column names
 overlap <- loadVariantOverlap(opt$predictionFile, genes.uniq, genes, variant.names=variant.list$variant, isTargetGeneTSS=opt$hasTargetGeneTSS)
 overlap <- filterVariantOverlap(overlap, opt$predScoreCol, opt$minPredScore, opt$minPredScorePromoters, opt$hasTargetGeneTSS)
-
+overlap <- overlap %>% filter( opt$predScoreCol >= opt$minPredScore)
 # Annotating overlaps
 all.flat <- annotateVariantOverlaps(overlap, variant.list, all.cs)
-if (opt$hasCellType){ 
-  all.flat <- subset(all.flat, CellType %in% cell.type.list)  ## IMPORTANT CHANGE
-}
 filter.flat <- subset(all.flat, CredibleSet %in% filter.cs$CredibleSet)
 
 if (!(is.null(opt$variantScoreCol))){
   filter.flat <- subset(filter.flat, opt$variantScoreCol>=opt$variantScoreThreshold)
 }
-
-# If a threshold is provided, getting annotations for significant variants
-sigScore.flat = NULL
-if (!(is.null(opt$variantScoreCol)) & !(is.null(opt$variantScoreThreshold))) {
-  sigScore.flat <- subset(filter.flat, CredibleSet %in% sigScore.cs$CredibleSet)
-}
-# Finding all diseases/traits in the credible set table
-# Assume that the cs has only one trait
-#traits <- unique(all.cs$Disease)
-trait <- opt$trait
 
 # specify file names 
 all.flat.file=paste0(opt$outbase, "data/all.flat.tsv")
@@ -176,39 +126,26 @@ dir.create(paste0(opt$outbase,"data/"))
 filter.flat <- filter.flat[, c((2:ncol(filter.flat)), 1)]
 write.tab(all.flat, file=all.flat.file)
 write.tab(filter.flat, file=filter.flat.file)
-if (!(is.null(sigScore.flat))) {
-  write.tab(sigScore.flat, file=paste0(opt$outbase, "data/sigScore.flat.tsv"))
-}
+
 variant.list.filter$pos_end <- variant.list.filter[, c(2)] + 1
 colnames <- names(variant.list.filter)
-#write.tab(variant.list.filter, file="test.tmp")
 variant.list.filter <- variant.list.filter[, c(1, 2, length(colnames), 3:length(colnames)-2)]
-#write.tab(variant.list.filter, file="test.tmp1")
 write.tab(variant.list.filter, file=variant.list.filter.file)
-# Reading in the gene TSS activity quantile information
-# gex <- read.delim(opt$gex, check.names=F)
 
 
 ##############################################################################
 ## Calculate enrichment per cell type by comparing the significant/provided
 ## variants with a set of background variants
 
-# Use the set of background variants instead of ctrlPP
-# Remove the column from output that uses ctrlPP
-#if (!is.null(opt$ctrlProb)) {
 edir <- paste0(opt$outbase, "enrichment/")
 dir.create(edir)
 
 #pdf(file=paste0(opt$outbase, "Enrichment.CellType.vsScore.pdf"), width=5, height=5)
 
 # Note: assuming one trait
-#for (trait in unique(variant.list.filter$Disease)) {
-#  tryCatch({
-#curr.vl <- subset(variant.list.filter, Disease==trait)
 variant.by.cells <- getVariantByCellsTable(filter.flat, isCellType=opt$hasCellType, isEnhancerBed=opt$isEnhancerBed)
 write.tab(variant.by.cells, file="variant.by.cells.all.tsv")
-## Get Corresponding background variant, background Overlap and prediction File without regions that
-# intersect with promoters
+## Get Corresponding background variant, background Overlap and prediction File without regions that intersect with promoters
 # A set of background variants
 bgVars <- read.delim(opt$backgroundVariants, check.names=F, header=F)  
 bgVars_noPromoter <- read.delim(opt$backgroundVariants_noPromoter, check.names=F, header=F)
